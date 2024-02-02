@@ -35,9 +35,9 @@ All RaMeDiES statistical models operate at the level of _mutational targets_, wh
 Descriptions of, sample code for running, and customizable paramaters for the following steps of our statistical framework are detailed in [our wiki](https://github.com/hms-dbmi/RaMeDiES/wiki): 
 
 * [Preprocess input variant data](https://github.com/hms-dbmi/RaMeDiES/wiki/Variant-data-input)
-* [Cohort-level _de novo_ recurrence](https://github.com/hms-dbmi/RaMeDiES/wiki/Cohort%E2%80%90level-de-novo-recurrence)
-* [Cohort-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Cohort%E2%80%90level-compound-heterozygosity)
-* [Individual-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Individual%E2%80%90level-compound-heterozygosity)
+* [Cohort-level _de novo_ recurrence](https://github.com/hms-dbmi/RaMeDiES/wiki/Cohort-level-de-novo-recurrence)
+* [Cohort-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Cohort-level-compound-heterozygosity)
+* [Individual-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Individual-level-compound-heterozygosity)
 
 ## :sparkles: Contact
 If you have questions or comments about running any of the code found in this repository, please contact Shilpa Kobren or Mikhail Moldovan at [first name]_[last name] at hms.harvard.edu.
