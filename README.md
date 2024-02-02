@@ -40,4 +40,4 @@ Descriptions of, sample code for running, and customizable paramaters for the fo
 * [Individual-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Individual-level-compound-heterozygosity)
 
 ## :sparkles: Contact
-If you have questions or comments about running any of the code found in this repository, please contact Shilpa Kobren or Mikhail Moldovan at [first name]_[last name] at hms.harvard.edu.
+If you have questions or comments about running any of the code found in this repository, please contact Mikhail Moldovan or Shilpa Kobren at [first name]_[last name] at hms.harvard.edu.
