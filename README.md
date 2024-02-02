@@ -39,5 +39,7 @@ Descriptions of, sample code for running, and customizable paramaters for the fo
 * [Cohort-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Cohort-level-compound-heterozygosity)
 * [Individual-level compound heterozygosity](https://github.com/hms-dbmi/RaMeDiES/wiki/Individual-level-compound-heterozygosity)
 
+:exclamation: Our statistical models operate at the level of "mutational targets" rather than individual-level variant data. These intermediate computed files can be shared freely to enable cross-cohort meta-analyses! See our [enabling cross-cohort analyses](https://github.com/hms-dbmi/RaMeDiES/wiki/Metaanalyses) wiki page for more details.
+
 ## :sparkles: Contact
 If you have questions or comments about running any of the code found in this repository, please contact Mikhail Moldovan or Shilpa Kobren at [first name]_[last name] at hms.harvard.edu.
