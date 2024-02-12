@@ -6,7 +6,7 @@ This software package implements three well-calibrated statistical methods for a
 3. genes harboring significant compound heterozygous variants in individual patients
 
 If you use RaMeDiES in your work, please cite our publication: 
-> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, J Willett, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _arXiv._ doi:[XXX](https://www.google.com/).
+> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, J Willett, M Berselli, W Ronchetti, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _arXiv._ doi:[XXX](https://www.google.com/).
 
 ## :sparkles: Prerequisites
 * Python 3.6 (or above)
@@ -44,4 +44,4 @@ Descriptions of, sample code for running, and customizable parameters for the fo
 :exclamation: Our statistical models operate at the level of "mutational targets" rather than individual-level variant data. These intermediate computed files can be shared freely to enable cross-cohort meta-analyses! See our [enabling cross-cohort analyses](https://github.com/hms-dbmi/RaMeDiES/wiki/Metaanalyses) wiki page for more details.
 
 ## :sparkles: Contact
-If you have questions or comments about running any of the code found in this repository, please contact Mikhail Moldovan or Shilpa Kobren at [first name]_[last name] at hms.harvard.edu.
+If you have questions or comments about running any of the code found in this repository, please contact Shilpa Kobren or Mikhail Moldovan at [first name]_[last name] at hms.harvard.edu.
