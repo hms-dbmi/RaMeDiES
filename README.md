@@ -9,9 +9,10 @@ If you use RaMeDiES in your work, please cite our publication:
 > SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, J Willett, M Berselli, W Ronchetti, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158v1).
 
 ## :sparkles: Prerequisites
-* Python 3.6 (or above)
-* Python libraries: os, sys, argparse, numpy, scipy
-
+* Python 3.6+
+* Python libraries: os, sys, argparse v1.1+, numpy v1.23.3+, scipy v1.91+
+* :exclamation: **Operating System:** Linux distribution; compatibility on MacOS is not guaranteed, and Windows is not supported.
+  
 ## :sparkles: Configuration
 Edit the configuration `cfg.py` file to include the full path to your local installation of this repository. All scripts expect this variable to end with a forward slash `/`. 
 
