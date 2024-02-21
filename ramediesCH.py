@@ -283,7 +283,6 @@ if not args.metadata_run_mode:
 else:
 	CH_dict = {}
 	CH_y_dict = sl.read_CH_muttargs(args.M, args.variant_annots, args.suppress_indels)
-	print(CH_y_dict)
 	mutnum_prod_dict = sl.read_mutnum_prods(args.M, args.variant_annots, args.suppress_indels)
 
 	# N_probands should be specified by the user in the case of metadata_run_mode
