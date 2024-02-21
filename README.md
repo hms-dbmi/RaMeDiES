@@ -17,13 +17,13 @@ If you use RaMeDiES in your work, please cite our publication:
 Edit the configuration `cfg.py` file to include the full path to your local installation of this repository. All scripts expect this variable to end with a forward slash `/`. 
 
 ```
-script_directory = "/full/path/to/github/directory/ramedies/"
+script_directory = "/full/path/to/github/repo/RaMeDiES/"
 ```
 
 ## :sparkles: Download precomputed data files
 All RaMeDiES statistical models operate at the level of _mutational targets_, which intuitively correspond to the total mutation rate of all possible variants (of a particular type) within a gene. We have precomputed per-gene mutational targets for CADD and SpliceAI variant functionality scores with respect to GRCh38/hg38. 
 
-You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/directory/ramedies/data`:
+You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/repo/RaMeDiES/data`:
 
 * `ens2gene.txt.gz`
 * `pseudogenes.txt.gz`
