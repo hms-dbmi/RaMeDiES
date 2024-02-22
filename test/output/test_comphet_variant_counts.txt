@@ -1,0 +1,19 @@
+# Sum (across cohort) of all products of (# paternally-inherited variants)x(# maternally-inherited variants) for each variant type pair
+# Variant input files processed from: test/input/
+paternal_variant_type	maternal_variant_type	total_product_of_variant_counts
+CS	CS	155313
+CS	CI	6949
+CS	IS	55883
+CS	II	3968
+CI	CS	8876
+CI	CI	414
+CI	IS	3309
+CI	II	220
+IS	CS	60783
+IS	CI	2727
+IS	IS	21945
+IS	II	1484
+II	CS	2405
+II	CI	112
+II	IS	886
+II	II	64

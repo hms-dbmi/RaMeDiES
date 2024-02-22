@@ -1,0 +1,6 @@
+# De novo mutation count by variant type across cohort
+inheritance	variant_type	denovo_mutation_count
+DN	CS	20
+DN	CI	1
+DN	IS	16
+DN	II	0
