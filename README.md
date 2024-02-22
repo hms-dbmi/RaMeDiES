@@ -14,7 +14,7 @@ If you use RaMeDiES in your work, please cite our publication:
 * :exclamation: **Operating System:** Linux distribution; compatibility on MacOS is not guaranteed, and Windows is not supported.
   
 ## :sparkles: Configuration
-Edit the configuration `cfg.py` file to include the full path to your local installation of this repository. All scripts expect this variable to end with a forward slash `/`. 
+Edit the configuration `cfg.py` file to include the full path to your local installation of this repository.
 
 ```
 script_directory = "/full/path/to/github/repo/RaMeDiES/"
