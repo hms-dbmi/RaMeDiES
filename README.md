@@ -25,13 +25,13 @@ All RaMeDiES statistical models operate at the level of _mutational targets_, wh
 
 You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/repo/RaMeDiES/data`:
 
-* `ens2gene.txt.gz`
-* `pseudogenes.txt.gz`
-* `score_lists_CI.txt.gz`
-* `score_lists_CS.txt.gz`
-* `score_lists_II.txt.gz`
-* `score_lists_IS.txt.gz`
-* `shet_table.txt.gz`
+* `ens2gene.txt.gz` (136 KB)
+* `pseudogenes.txt.gz` (231 KB)
+* `score_lists_CI.txt.gz` (629 KB)
+* `score_lists_CS.txt.gz` (97 MB)
+* `score_lists_II.txt.gz` (218 KB)
+* `score_lists_IS.txt.gz` (13.35 MB)
+* `shet_table.txt.gz` (489 KB)
 
 ## :sparkles: RaMeDiES Framework
 Descriptions of, sample code for running, and customizable parameters for the following steps of our statistical framework are detailed in [our wiki](https://github.com/hms-dbmi/RaMeDiES/wiki): 
