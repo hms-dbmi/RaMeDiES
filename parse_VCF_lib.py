@@ -1,10 +1,9 @@
 """
 parse_VCF_lib.py
 
-Contains functions that parse a given VCF
-Returns a set of updated Gene objects (specified in statlib.py) that are
-	added to the [supplied] Gene_obj_dict dictionary containing information 
-	about the cohort.
+Contains functions that parse a given tab-delimited variant input file
+Returns a set of updated Gene objects (specified in stat_lib.py) that are added to the [supplied]
+    Gene_obj_dict dictionary containing information about the cohort.
 
 Dependencies:
 1. cfg.py
@@ -13,380 +12,354 @@ Dependencies:
 4. python sys library
 5. numpy
 
-Main function is parse_VCF, which processes a single VCF file.
-The rest are functions processing particular variants in the input VCF.
+Main function is parse_variant_input.
 """
 
 import cfg
-import stat_lib as sl
-import init_objs_lib as iol
-
+import stat_lib
+import init_objs_lib
 import gzip
 import sys
 import numpy as np
 
-# Functions that checks that some needed column names are present in the header of
-#	the processed VCF.
-# The column names are specified in cfg.vcf_format_dict dictionary
-# With different run specifications, some columns may be not needed.
-# For instance, if processing of intronic regions is not specified,
-#	the existence of SpliceAI score columns will be ignored.
-def get_missing_terms(header, 
-					  de_novo_bool, 
-					  consequence_list, 
-					  MAF_thr, 
-					  no_qual_track_bool):
-	
-	# header: dictionary with column name codes (specified in cfg.vcf_format_dict)
-	#	leading to column numbers in a tab-delimited VCF
-	# de_novo_bool: boolean value specifying de novo run
-	# consequence_list: list/string of single-character vriant position annotations
-	#	'C' for coding, 'I' for intronic
-	# MAF_thr: MAF threshold value, if not specified, the filter will not be imposed
-	# no_qual_track_bool: boolean value for the case of no QC track in provided
-	# VCFs
 
-	# Initial missing terms list that is then filtered down according to
-	#	run specifications
-	missing_terms = []
-	for VCF_field in cfg.vcf_format_dict.values():
-		if not header.get(VCF_field):
-			missing_terms.append(VCF_field)
+# ------------------------------------------------------------------------------------------------------------
+# Check that required columns are present in the header of the processed input variant files.
+# Column names are specified in cfg.vcf_format_dict dictionary
+# Some columns are optional depending on run specifications
+# ------------------------------------------------------------------------------------------------------------
 
-	# Second missing terms list that is returned
-	missing_terms_2 = []
-	for VCF_field in missing_terms:
-		# If coding variants are not processed, the CADD (or generally coding) 
-		#	scores are not needed
-		if 'C' not in consequence_list and cfg.rev_vcf_format_dict[VCF_field] == "CADD":
-			continue
-		# If intronic variants are not processed, the SpliceAI scores are not needed
-		elif 'I' not in consequence_list and \
-			cfg.rev_vcf_format_dict[VCF_field].startswith("SAI"):
+def get_missing_columns(header,
+                        de_novo_bool,
+                        consequence_list,
+                        MAF_thr,
+                        no_qual_track_bool):
+    """
+    :param header: dictionary with column name -> variable name
+    :param de_novo_bool: True if running on de novos
+    :param consequence_list: variant type annotations considered ('C' for coding, 'I' for intronic)
+    :param MAF_thr: no filter imposed if not specified
+    :param no_qual_track_bool: False if quality control track is missing
+    :return: comma-separated list of missing columns in input variant file
+    """
 
-			continue
+    # total missing terms (filtered down according to run specifications)
+    missing_terms = []
+    for column_name in cfg.vcf_format_dict.values():
+        if column_name not in header:
+            missing_terms.append(column_name)
 
-		# For run on de novo VCFs, inheritance does not have to be specified
-		if de_novo_bool and cfg.rev_vcf_format_dict[VCF_field] == "inherited_from":
-			continue
-		# If MAF threshold is not specified, the MAF column is not needed
-		if not MAF_thr and cfg.rev_vcf_format_dict[VCF_field] == "MAF":
-			continue
-		# If no QC tracks are present in the VCFs, quality tracks will not be
-		#	taken into account
-		if no_qual_track_bool and cfg.rev_vcf_format_dict[VCF_field] == "qual_track":
-			continue
+    missing_terms_2 = []
+    for column_name in missing_terms:
 
-		missing_terms_2.append(VCF_field)
+        # ignore CADD scores if excluding coding variants
+        if 'C' not in consequence_list and cfg.rev_vcf_format_dict[column_name] == "CADD":
+            continue
 
-	return ','.join(missing_terms_2)
+        # ignore SpliceAI scores if excluding intronic variants
+        if 'I' not in consequence_list and cfg.rev_vcf_format_dict[column_name].startswith("SAI"):
+            continue
+
+        # ignore inherited variants when running in de novo mode
+        if de_novo_bool and cfg.rev_vcf_format_dict[column_name] == "inherited_from":
+            continue
+
+        # ignore MAF column if no threshold is specified
+        if not MAF_thr and cfg.rev_vcf_format_dict[column_name] == "MAF":
+            continue
+
+        # ignore quality Roulette track as specified
+        if no_qual_track_bool and cfg.rev_vcf_format_dict[column_name] == "qual_track":
+            continue
+
+        missing_terms_2.append(column_name)
+
+    return ','.join(missing_terms_2)
 
 
-# Function that infers coding/intronic annotation type from VEP consequences
-def get_var_type1(var_annots, consequence_list):
-	# var_type1: coding/intronic
-	# Annotations may be separated by either comma (,) or an ampersand (&)
-	var_annots = var_annots.replace('&', ',')
-	conss = var_annots.split(',')
-	# consequence codes are specified in cfg.VEP_cons_dict
-	# Will crash the script to if VEP consequences are misspecified
-	conss_codes = set([cfg.VEP_cons_dict[cons] for cons in conss])
-	# Single annotation is assigned hierarchically:
-	#	First, if coding consequences are present, variant is deemed coding
-	#	Second, if no coding consequences are present and there are intronic 
-	#	annotations, variant is deemed intronic
-	if 'C' in conss_codes:
-		var_type1 = 'C'
-	elif 'I' in conss_codes:
-		var_type1 = 'I'
-	else:
-		return None
+# ------------------------------------------------------------------------------------------------------------
+# Infer if variant is coding or intronic from consequence column value
+# ------------------------------------------------------------------------------------------------------------
 
-	return var_type1
+def get_variant_loc_type(consequence_value):
+    """
+    :param var_annots: comma- or ampersand-delimited values in the "consequence" column from the input variant file
+    :return: 'C' for coding variant, 'I' for intronic variant, None for neither
+    """
 
-# Function that infers SNP/indel annotation
-# Returns None if the length requirements for indels are not satisfied
-def get_var_type2(ref_al, alt_al, var_type1, suppress_indels_bool):
-	# var_type2: SNP/indel
-	# ref_al/alt_al: reference and alternative alleles as specified in VCFs
-	# var_type1 (coding/intronic) influences the length of accepted indels
-	# suppress_indels_bool: under indel suppression, indels are not accepted
+    consequence_value = consequence_value.replace('&', ',').split(',')
+    consequence_codes = set([cfg.VEP_cons_dict.get(cons, '') for cons in consequence_value])
 
-	# Mutation 'length': 0 for SNPs, negative for deletions, positive
-	#	for insertions
-	l_mut = len(ref_al) - len(alt_al)
-	if l_mut == 0:
-		return 'S'
-
-	if l_mut != 0 and suppress_indels_bool:
-		return None
-
-	# Coding indels of the length of up to 10 are accepted
-	if var_type1 == "C" and np.abs(l_mut) > 10:
-		return None
-
-	# Intronic deletions up to length 4 and 1nt insertions
-	#	are accepted
-	elif var_type1 == "I" and (l_mut > 4 or l_mut < -1):
-		return None
-
-	return 'I'
-
-# Function that parses score values out of a VCF line
-#	Returns None if the score is below the specified threshold 
-def get_score_val(var_l, header, var_type1, score_thr_dict):
-	# var_l: VCF line corresponding to a single variant
-	# header: dictionary with column name codes (specified in cfg.vcf_format_dict)
-	#	leading to column numbers in a tab-delimited VCF
-	# var_type1: coding/intronic
-	# score_thr_dict: dictionary with specified score thresholds:
-	#	var_type1 (C/I for coding/intronic) -> score threshold
-	if var_type1 == 'C':
-		score = eval(var_l[header[cfg.vcf_format_dict["CADD"]]])
-	else:
-		# Maximal SpliceAI score over putative donor/acceptor gains/losses
-		score = np.max([eval(var_l[header[cfg.vcf_format_dict["SAI_AG"]]]),
-						eval(var_l[header[cfg.vcf_format_dict["SAI_AL"]]]),
-						eval(var_l[header[cfg.vcf_format_dict["SAI_DG"]]]),
-						eval(var_l[header[cfg.vcf_format_dict["SAI_DL"]]])])
-
-	# Filter for scores below specified thresholds
-	if score < score_thr_dict[var_type1]:
-		return None
-	return score
+    if 'C' in consequence_codes:
+        return 'C'
+    elif 'I' in consequence_codes:
+        return 'I'
+    return None
 
 
-# Function that infers inheritence pattern of a given variant
-#	from a line in a VCF
-def get_inheritance(var_l, header, de_novo_bool, drop_HR = cfg.drop_HR):
-	# var_l: VCF line corresponding to a single variant
-	# header: dictionary with column name codes (specified in cfg.vcf_format_dict)
-	#	leading to column numbers in a tab-delimited VCF
-	# de_novo_bool: boolean value specifying de novo run
-	# drop_HR: boolean value specifying homozyhous variant processing
-	#	default False (not processed), specified in cfg.drop_HR
+# ------------------------------------------------------------------------------------------------------------
+# Infer if variant is SNV or indel (within size limits) from ref and alt column values
+# ------------------------------------------------------------------------------------------------------------
 
-	# For a de novo run, the inherited_from column may be abscent in an 
-	#	de novo-only VCF
-	if de_novo_bool and not header.get(cfg.vcf_format_dict["inherited_from"]):
-		return "DN"
+def get_variant_length_type(ref_al, alt_al, variant_loc_type, suppress_indels_bool):
+    """
+    :param ref_al: reference allele column value
+    :param alt_al: alternate allele column value
+    :param variant_loc_type: 'C' for coding and 'I' for intronic
+    :param suppress_indels_bool: True if indels are to be ignored
+    :return: 'S' for SNV, 'I' for indel, None for neither
+    """
 
-	inh_info = var_l[header[cfg.vcf_format_dict["inherited_from"]]]
+    variant_length = len(ref_al) - len(alt_al)
 
-	# by the format specification (see manual), homozygous variant inheritance
-	# consists of maternal/paternal inheritance keywords separated by a comma
-	inh_info = inh_info.split(',')
+    if variant_length == 0:
+        return 'S'
+    if variant_length != 0 and suppress_indels_bool:
+        return None
+    if variant_loc_type == "C" and np.abs(variant_length) > 10:  # coding indels must be <=10bp
+        return None
+    elif variant_loc_type == "I" and (
+            variant_length > 4 or variant_length < -1):  # intronic insertions must be <=4bp and deletions <=1 bp
+        return None
 
-	# Homozygous recessive variants are disregarded at this point
-	if drop_HR and len(inh_info) > 1:
-		return None
-
-	# In-program inheritance identifier specified in cfg.inherited_from_dict
-	inh_ID = cfg.inherited_from_dict.get(inh_info[0])
-	if not inh_info:
-		w_str = f"WARNING: Incorrect inheritance specification: {inh_info[0]}\n"
-		sys.stderr.write(w_str)
-
-	# Check if a variant is a de novo and if that agrees with the run specifications
-	if de_novo_bool and inh_ID != "DN": 
-		return None
-
-	if not de_novo_bool and inh_ID == "DN": 
-		return None
-
-	return inh_ID
+    return 'I'
 
 
-# Function that processes a quality track that may be present in a VCF.
-def qual_track(var_l, header, no_qual_track_bool):
-	# var_l: VCF line corresponding to a single variant
-	# header: dictionary with column name codes (specified in cfg.vcf_format_dict)
-	#	leading to column numbers in a tab-delimited VCF
-	# no_qual_track_bool: boolean value for the abscence of quality track.
-	#	is specified by the user as a parameter of one of master scripts
+# ------------------------------------------------------------------------------------------------------------
+# Get corresponding variant functionality score given the variant type
+# ------------------------------------------------------------------------------------------------------------
 
-	if no_qual_track_bool:
-		return True
-	
-	# quality track values are specified in cfg.vcf_format_dict.
-	#	some value, followed by a comma, followed by high/low by default
-	qual_val = var_l[header[cfg.vcf_format_dict["qual_track"]]].split(',')[-1]
-	# Misspecification of quality values will produce a warning
-	#	and the variant will be discarded
-	qual_ID = cfg.qual_value_dict.get(qual_val)
-	if qual_ID == None:
-		sys.stderr.write(f"WARNING: Quality track misspecified: {qual_val}\n")
-		return False
-	return cfg.qual_value_dict[qual_val]
+def get_score_val(variant_line, header, variant_loc_type, score_thr_dict):
+    """
+    :param variant_line: list of tab-delimited values from processed variant input file
+    :param header: dictionary of column_name -> 0-index in file
+    :param variant_loc_type: 'C' for coding, 'I' for intronic
+    :param score_thr_dict: dictionary of variant type -> variant score threshold
+    :return: float of the appropriate score
+    """
 
+    if variant_loc_type == 'C':
+        score = eval(variant_line[header[cfg.vcf_format_dict["CADD"]]])
+    else:
+        # Maximal SpliceAI score over putative donor/acceptor gains/losses
+        score = np.max([eval(variant_line[header[cfg.vcf_format_dict["SAI_AG"]]]),
+                        eval(variant_line[header[cfg.vcf_format_dict["SAI_AL"]]]),
+                        eval(variant_line[header[cfg.vcf_format_dict["SAI_DG"]]]),
+                        eval(variant_line[header[cfg.vcf_format_dict["SAI_DL"]]])])
 
-# Main function of the library. Processes a given VCF, returns:
-#	1. Gene object updated with the de novo/CH variants from this VCF
-#	2. varcount_dict: dictionary containing variant counts stratified by 
-#		annotations (coding/intronic, SNP/indel) and inheritance patterns
-# For the sake of computational speed, the filters are imposed sequentially
-def parse_VCF(VCF_name,
-			  Gene_inst_dict, 
-			  gzip_bool,
-			  MAF_thr,
-			  score_thr_dict, 
-			  pseudogene_dict,
-			  consequence_list,
-			  suppress_indels_bool,
-			  de_novo_bool,
-			  no_qual_track_bool):
-	# VCF_name: path to the processed VCF
-	# Gene_inst_dict: collection of Gene instances (class specified in stat_lib)
-	#	stratified by annotations and ENSEMBL IDs
-	# gzip_bool: boolean value indicating whether the VCF is gzip-compressed
-	# MAF_thr: threshold for the minor allele frequency specified by user
-	# score_thr_dict: collection of score thresholds specified by the user in 
-	#	the master scripts
-	# pseudogene_dict: list of discarded ENSEMBL IDs. Specified in 
-	#	init_objs_lib/make_pseudogene_dict
-	# consequence_list: variant consequence codes specified by the user.
-	#	'C' for coding, 'I' for intronic
-	# suppress_indels_bool: under indel suppression, indels are not accepted
-	# de_novo_bool: boolean value specifying de novo run
-	# no_qual_track_bool: boolean value for the abscence of quality track.
+    # Filter for scores below specified thresholds
+    if score < score_thr_dict[variant_loc_type]:
+        return None
+    return score
 
 
-	# Selecting a proper file open function based on gzip_bool value
-	(open_func, open_reg) = (gzip.open, 'rt') if gzip_bool else (open, 'r')
+# ------------------------------------------------------------------------------------------------------------
+# Get inheritance ID (M=maternally inherited, P=paternally inherited, DN=denovo)
+# ------------------------------------------------------------------------------------------------------------
 
-	# varcount_dict: inheritace code (DN/M/P) -> variant annotation -> variant count
-	varcount_dict = {}
+def get_inheritance(variant_line, header, de_novo_bool, drop_homozygous_recessive=cfg.drop_HR):
+    """
+    :param variant_line: list of tab-delimited values from processed variant input file
+    :param header: dictionary of column_name -> 0-index in file
+    :param de_novo_bool: True if de novos are being evaluated
+    :param drop_homozygous_recessive: True if homozygous recessive variants should be processed
+    :return: 'DN' if this is a de novo and None otherwise
+    """
 
-	# multiple_mut_dict: ENS_ID -> True. Used in the de novo processing to ensure
-	#	only one de novo per gene per individual 
-	multiple_mut_dict = {}
-	with open_func(VCF_name, open_reg) as inh:
-		# The first line in VCF starting with non-# is deemed a header
-		h = None
-		for var_l in inh:
-			if var_l.startswith('#'):
-				continue
+    if de_novo_bool and not header.get(cfg.vcf_format_dict["inherited_from"]):
+        return "DN"
 
-			var_l = var_l.strip().split('\t')
+    inheritance_value = variant_line[header[cfg.vcf_format_dict["inherited_from"]]].split(',')
 
-			if not h:
-				# h -> header: dictionary with column name codes 
-				#	(specified in cfg.vcf_format_dict)
-				h = {var_l[i]:i for i in range(len(var_l))}
-				# Checking if the VCf format is consistent with the run setup
-				missing_terms = get_missing_terms(h, 
-												  de_novo_bool, 
-												  consequence_list,
-												  MAF_thr,
-												  no_qual_track_bool)
-				if missing_terms != '':
-					sys.stderr.write(f"{VCF_name} Missing VCF fields: {missing_terms}\n")
-					return None
-				continue
+    # Homozygous recessive variants are disregarded at this point
+    if drop_homozygous_recessive and len(inheritance_value) > 1:
+        return None
 
-#			print('\n', var_l)
+    # In-program inheritance identifier specified in cfg.inherited_from_dict
+    inheritance_id = cfg.inherited_from_dict.get(inheritance_value[0])
+    if not inheritance_value:
+        w_str = f"WARNING: Incorrect inheritance specification: {inheritance_value[0]}\n"
+        sys.stderr.write(w_str)
 
-			ENS_ID = var_l[h[cfg.vcf_format_dict["ENS_ID"]]]
+    # only considering de novos (and this is inherited)?
+    if de_novo_bool and inheritance_id != "DN":
+        return None
 
-			# Checking if the variant does not land within a discarded gene
-			if pseudogene_dict.get(ENS_ID):
-				continue
+    # only considering inherited (and this is a denovo) ?
+    if not de_novo_bool and inheritance_id == "DN":
+        return None
 
-			# Infering standard parameters of a variant
-			ref_al = var_l[h[cfg.vcf_format_dict["ref_al"]]]
-			alt_al = var_l[h[cfg.vcf_format_dict["alt_al"]]]
-			chrom = var_l[h[cfg.vcf_format_dict["chrom"]]]
-#			print("1", chrom)
+    return inheritance_id
 
-			# X-chromosome, Y-chromosome and mitochondrial variants are discarded
-			if not chrom.isdigit():
-				continue
 
-			chrom = eval(chrom)
-			position = eval(var_l[h[cfg.vcf_format_dict["position"]]])
+# ------------------------------------------------------------------------------------------------------------
+# Parse the Roulette quality track
+# ------------------------------------------------------------------------------------------------------------
 
-			# Infering coding ('C')/intronic ('I') codes from VEP consequences
-			var_annots = var_l[h[cfg.vcf_format_dict["var_annot"]]]
-			var_type1 = get_var_type1(var_annots, consequence_list)
-#			print("2", var_type1)
+def qual_track(variant_line, header, no_qual_track_bool):
+    """
+    :param variant_line: list of tab-delimited values from processed variant input file
+    :param header: dictionary of column_name -> 0-index in file
+    :param no_qual_track_bool: True if Roulette quality track is missing
+    :return: True for passing quality
+    """
 
-			# QC for consequence specification
-			if not var_type1:
-				continue
+    if no_qual_track_bool:
+        return True
 
-			# Infering whether the variant is an SNP ('S') or an indel ('I')
-			var_type2 = get_var_type2(ref_al, alt_al, var_type1, suppress_indels_bool)
-#			print("3", var_type2)
+    # e.g., 8.456e-10,high
+    quality_value = variant_line[header[cfg.vcf_format_dict["qual_track"]]].split(',')[-1]
+    quality_id = cfg.qual_value_dict.get(quality_value)
 
-			# QC for indel length
-			if not var_type2:
-				continue
+    if not quality_id:
+        sys.stderr.write('WARNING: Low quality variant dropped: ' + ' '.join(variant_line) + '\n')
+        return False
 
-			# variant annotation as specified in cfg.var_annot_list
-			var_annot = (var_type1, var_type2)
+    return quality_id
 
-			# QC for information about this gene in the default inputs
-			if not Gene_inst_dict[var_annot].get(ENS_ID):
-				continue
 
-			# Inference of CADD/SpliceAI scores
-			score = get_score_val(var_l, h, var_type1, score_thr_dict)
-#			print("4", score)
+# ------------------------------------------------------------------------------------------------------------
+# MAIN FUNCTION
+# for a given input variant file, return gene object with all variants and a dictionary of variant type -> counts
+# ------------------------------------------------------------------------------------------------------------
 
-			# QC/thresholding of scores
-			if score == None:
-				continue
+def is_gzipped(file_path):
+    """
+    Check if a file is gzipped by checking its file signature.
+    """
+    with open(file_path, 'rb') as f:
+        # Read the first two bytes to check the file signature
+        signature = f.read(2)
+    return signature == b'\x1f\x8b'  # Gzip file signature
 
-			# MAF filter
-			if MAF_thr != -1:
-				MAF = eval(var_l[header[cfg.vcf_format_dict["MAF"]]])
-				if MAF > MAF_thr:
-					continue
 
-			# Inference of inheritance pattern
-			inher = get_inheritance(var_l, h, de_novo_bool)
-#			print("5", inher)
+def parse_variant_input(input_variant_file,
+                        gene_instances,
+                        maf_threshold,
+                        score_threshold_dict,
+                        pseudogene_dict,
+                        consequence_list,
+                        suppress_indels_flag,
+                        de_novo_flag,
+                        no_qual_track_flag):
+    """
+    :param input_variant_file: full path to a processed tab-delimited variant file
+    :param gene_instances: collection of Gene instances (class specified in stat_lib) stratified by annotations and
+        ensembl IDs
+    :param gzip_flag: True if the input variant file is gzipped
+    :param maf_threshold: user-specified minor allele frequency threshold
+    :param score_threshold_dict: variant type -> score threshold imposed
+    :param pseudogene_dict: ensembl IDs to be excluded, specified in init_objs_lib/make_pseudogene_dict
+    :param consequence_list: variant consequences considered; C=coding, I=intronic
+    :param suppress_indels_flag: True if indels are to be ignored
+    :param de_novo_flag: True if we are processing de novos
+    :param no_qual_track_flag: True if Roulette quality track is absent
+    :return:
+    """
 
-			# QC on inheritance
-			if not inher:
-				continue
+    # Selecting a proper file open function based on gzip_flag value
+    (open_func, open_reg) = (gzip.open, 'rt') if is_gzipped(input_variant_file) else (open, 'r')
 
-			# Filter by the quality track
-			if not qual_track(var_l, h, no_qual_track_bool):
-				continue
+    varcount_dict = {}  # inheritace code (DN/M/P) -> variant annotation -> variant count
 
-			# Only the first of de novo variants occurring in a gene in a 
-			#	patient will be processed
-			if de_novo_bool and multiple_mut_dict.get(ENS_ID):
-				sys.stderr.write(f"\nWARNING: multiple de novo variants in {VCF_name} gene {ENS_ID}\n")
-				sys.stderr.write(f"...will include only the first observed variant\n")
-				continue
+    multiple_mutation_dict = {}  # ensembl ID -> True if 2+ de novos in the same gene in the same individual
 
-			multiple_mut_dict[ENS_ID] = True
+    with open_func(input_variant_file, open_reg) as inh:
+        header = None
+        for variant_line in inh:
+            if variant_line.startswith('#'):
+                continue
 
-#			print("6", qual_track(var_l, h, no_qual_track_bool))
-			
-			# VCF name is used as individual ID throughout
-			ind_id = VCF_name.split('/')[-1]
+            variant_line = variant_line[:-1].split('\t')
 
-			# If all filters are passed, a Variant object (specified in stat_lib) is created
-			Variant_obj = sl.Variant((chrom, position, ref_al, alt_al),
-									  var_annot,
-									  score,
-									  inher,
-									  ind_id)
-			
-			# ... and added to the vars list of a respective Gene object 
-			#	(specified in stat_lib)
-			Gene_inst_dict[var_annot][ENS_ID].vars.append(Variant_obj)
+            if not header:
+                header = {column_name: column_index for column_index, column_name in enumerate(variant_line)}
+                missing_terms = get_missing_columns(header,
+                                                    de_novo_flag,
+                                                    consequence_list,
+                                                    maf_threshold,
+                                                    no_qual_track_flag)
+                if missing_terms != '':
+                    sys.stderr.write(f"{input_variant_file} Missing VCF fields: {missing_terms}\n")
+                    return None
+                continue
 
-			# Updating the per-individual variant count dictionary
-			# varcount_dict: inheritance code -> annotation code -> # variants
-			if not varcount_dict.get(inher):
-				varcount_dict[inher] = iol.init_varcount_dict()
-			varcount_dict[inher][var_annot] += 1
+            ensembl_id = variant_line[header[cfg.vcf_format_dict["ensembl_gene_id"]]]
 
-	return varcount_dict
+            # skip blacklisted pseudogenes
+            if pseudogene_dict and ensembl_id in pseudogene_dict:
+                continue
+
+            # restrict to autosomes 1-22
+            chrom = variant_line[header[cfg.vcf_format_dict["chrom"]]].replace('chr', '')
+            if not chrom.isdigit():  # drop chromosomes X, Y, MT
+                continue
+            chrom = eval(chrom)
+
+            # is variant a coding or intronic variant?
+            variant_types = variant_line[header[cfg.vcf_format_dict["var_annot"]]]
+            var_type1 = get_variant_loc_type(variant_types)
+            if not var_type1:
+                continue
+
+            # is variant an SNV or appropriately-sized indel?
+            ref_al = variant_line[header[cfg.vcf_format_dict["ref_al"]]]
+            alt_al = variant_line[header[cfg.vcf_format_dict["alt_al"]]]
+            var_type2 = get_variant_length_type(ref_al, alt_al, var_type1, suppress_indels_flag)
+            if not var_type2:
+                continue
+
+            # is the variant a type we are interested in?
+            variant_type = (var_type1, var_type2)
+            if gene_instances and ensembl_id not in gene_instances[variant_type]:
+                continue
+
+            # is the variant functionality score high enough?
+            score = get_score_val(variant_line, header, var_type1, score_threshold_dict)
+            if not score:
+                continue
+
+            # is the variant rare enough in the population?
+            if maf_threshold != -1:
+                MAF = eval(variant_line[header[cfg.vcf_format_dict["MAF"]]])
+                if MAF > maf_threshold:
+                    continue
+
+            # is the inheritance pattern one we are interested in?
+            inheritance = get_inheritance(variant_line, header, de_novo_flag)
+            if not inheritance:
+                continue
+
+            # is this a high quality variant (if we care)?
+            if not qual_track(variant_line, header, no_qual_track_flag):
+                continue
+
+            # select the FIRST de novo per gene per patient (if there are multiple)
+            if de_novo_flag and multiple_mutation_dict.get(ensembl_id):
+                sys.stderr.write(f"\nWARNING: multiple de novo variants in {input_variant_file} gene {ensembl_id}\n")
+                sys.stderr.write(f"...will include only the first observed variant\n")
+                continue
+            multiple_mutation_dict[ensembl_id] = True
+
+            # if we made it to this point, create a new variant object
+            position = eval(variant_line[header[cfg.vcf_format_dict["position"]]])
+            individual_id = input_variant_file.split('/')[-1]
+            variant_object = stat_lib.Variant((chrom, position, ref_al, alt_al),
+                                     variant_type,
+                                     score,
+                                     inheritance,
+                                     individual_id)
+
+            # and add it to the corresponding gene object
+            gene_instances[variant_type][ensembl_id].vars.append(variant_object)
+
+            # Updating the per-individual variant count dictionary
+            # varcount_dict: inheritance code -> annotation code -> # variants
+            if not varcount_dict.get(inheritance):
+                varcount_dict[inheritance] = init_objs_lib.init_varcount_dict()
+            varcount_dict[inheritance][variant_type] += 1
+
+    return varcount_dict
 
 
 # Written on 01.23.2024 by Mikhail Moldovan, HMS DBMI

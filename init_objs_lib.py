@@ -30,7 +30,7 @@ def init_varcount_dict():
 
 
 # Function that parses a precomputed mutational target file for CADD or SpliceAI score bins
-# Gene_inst_dict: variant annotation -> ENSEMBL ID -> Gene instance (as specified in stat_lib)
+# gene_instances: variant annotation -> ENSEMBL ID -> Gene instance (as specified in stat_lib)
 def parse_variant_scores_file(variant_annot,
 							  Gene_inst_dict,
 							  score_thr):
@@ -89,13 +89,13 @@ def parse_variant_scores_file(variant_annot,
 
 
 # Function that parses precomputed mutational target files for CADD and SpliceAI score bins
-# Produces: Gene_inst_dict: variant annotation -> ENSEMBL ID -> Gene instance
+# Produces: gene_instances: variant annotation -> ENSEMBL ID -> Gene instance
 # total_mu_dict: variant annotation -> total mutational target of that annotation
 def parse_variant_scores_files(score_thr_dict,
 							   consequence_list,
 			  				   suppress_indels):
-	# Initialization of Gene_inst_dict
-	# Gene_inst_dict: 
+	# Initialization of gene_instances
+	# gene_instances:
 	#	variant annotation -> ENSEMBL ID -> Gene instance (as specified in stat_lib)
 	Gene_inst_dict = {variant_annot : {} for variant_annot in variant_type_iter()}
 
@@ -134,11 +134,11 @@ def make_pseudogene_dict():
 	return pseudogene_dict_ens
 
 
-# Makes a dictionary ensembl_id_dict: ENS_ID -> Gene ID
+# Makes a dictionary ensembl_id_dict: ensembl_gene_id -> Gene ID
 # Path to the input file is specified in cfg.py
 def make_ENS2GeneID_dict(forward=True):
-	# forward=True: ENS_ID -> Gene ID
-	# forward=False: Gene ID -> ENS_ID
+	# forward=True: ensembl_gene_id -> Gene ID
+	# forward=False: Gene ID -> ensembl_gene_id
 	ensembl_id_dict = {}
 	with gzip.open(cfg.ens2gene, 'rt') as ens_handle:
 		for id_line in ens_handle:
