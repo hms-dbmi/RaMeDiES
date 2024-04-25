@@ -33,9 +33,10 @@ def parse_arguments():
     """
 
     parser = argparse.ArgumentParser(description="""
-        RaMeDiES de novo: provided a set of processed variant files containing de novo variants in probands, 
+        RaMeDiES de novo: provided a set of VCFs containing de novo variants in probands, 
         assess the significance of the enrichment and deleteriousness of variants landing 
-        in genes hit by de novo mutations.""")
+        in genes hit by de novo mutations. For additional information, consult our paper and
+        the manual.""")
 
     parser.add_argument('--variant_annots', type=str, default="CI", help="""
         String of codes for variant annotations:

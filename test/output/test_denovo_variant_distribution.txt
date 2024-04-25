@@ -1,0 +1,17 @@
+# Variant count distribution computed from input variant files in test/input/
+# variant_annotations:	CI
+# CADD_threshold:	0.5
+# SpliceAI_threshold:	0.05
+inheritance	variant_type	variant_count	number_samples
+DN	CS	0	1
+DN	CS	1	1
+DN	CS	2	5
+DN	CS	4	1
+DN	CS	5	1
+DN	CI	0	8
+DN	CI	1	1
+DN	IS	0	2
+DN	IS	1	2
+DN	IS	2	1
+DN	IS	3	4
+DN	II	0	9

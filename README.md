@@ -14,24 +14,24 @@ If you use RaMeDiES in your work, please cite our publication:
 * :exclamation: **Operating System:** Linux distribution; compatibility on MacOS is not guaranteed, and Windows is not supported.
   
 ## :sparkles: Configuration
-Edit the configuration `cfg.py` file to include the full path to your local installation of this repository. All scripts expect this variable to end with a forward slash `/`. 
+Edit the configuration `cfg.py` file to include the full path to your local installation of this repository.
 
 ```
-script_directory = "/full/path/to/github/directory/ramedies/"
+script_directory = "/full/path/to/github/repo/RaMeDiES/"
 ```
 
 ## :sparkles: Download precomputed data files
 All RaMeDiES statistical models operate at the level of _mutational targets_, which intuitively correspond to the total mutation rate of all possible variants (of a particular type) within a gene. We have precomputed per-gene mutational targets for CADD and SpliceAI variant functionality scores with respect to GRCh38/hg38. 
 
-You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/directory/ramedies/data`:
+You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/repo/RaMeDiES/data`:
 
-* `ens2gene.txt.gz`
-* `pseudogenes.txt.gz`
-* `score_lists_CI.txt.gz`
-* `score_lists_CS.txt.gz`
-* `score_lists_II.txt.gz`
-* `score_lists_IS.txt.gz`
-* `shet_table.txt.gz`
+* `ens2gene.txt.gz` (136 KB)
+* `pseudogenes.txt.gz` (231 KB)
+* `score_lists_CI.txt.gz` (629 KB)
+* `score_lists_CS.txt.gz` (97 MB)
+* `score_lists_II.txt.gz` (218 KB)
+* `score_lists_IS.txt.gz` (13.35 MB)
+* `shet_table.txt.gz` (489 KB)
 
 ## :sparkles: RaMeDiES Framework
 Descriptions of, sample code for running, and customizable parameters for the following steps of our statistical framework are detailed in [our wiki](https://github.com/hms-dbmi/RaMeDiES/wiki): 
