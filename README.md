@@ -12,8 +12,9 @@ If you use RaMeDiES in your work, please cite our publication:
 > SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, J Willett, M Berselli, W Ronchetti, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158v1).
 
 ## :sparkles: Prerequisites
-* Python 3.6+
-* Python libraries: os, sys, argparse v1.1+, numpy v1.23.3+, scipy v1.91+
+* Python 3.6+, R 4.1+
+* Python libraries: os, sys, argparse v1.1+, numpy v1.23.3+, scipy v1.91+, rpy2 v3.15.16+, requests v3.31+, urllib3 v1.26.8+
+* R packages: cluster
 * :exclamation: **Operating System:** Linux distribution; compatibility on MacOS is not guaranteed, and Windows is not supported.
   
 ## :sparkles: Configuration
@@ -23,10 +24,10 @@ Edit the configuration `cfg.py` file to include the full path to your local inst
 script_directory = "/full/path/to/github/repo/RaMeDiES/"
 ```
 
-## :sparkles: Download precomputed data files
-All RaMeDiES statistical models operate at the level of _mutational targets_, which intuitively correspond to the total mutation rate of all possible variants (of a particular type) within a gene. We have precomputed per-gene mutational targets for CADD and SpliceAI variant functionality scores with respect to GRCh38/hg38. 
+## :sparkles: Precomputed data files
+We have precomputed per-gene mutational targets for CADD and SpliceAI variant functionality scores with respect to GRCh38/hg38. *The most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`.
 
-You must download these **seven** required files from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE) and store them locally in `/full/path/to/github/repo/RaMeDiES/data`:
+A freeze of the precomputed files used in our initial manuscript submission (2024-02-01) can be downloaded from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE).
 
 * `ens2gene.txt.gz` (136 KB)
 * `pseudogenes.txt.gz` (231 KB)
