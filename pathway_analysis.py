@@ -76,8 +76,8 @@ def hpo_from_hpofile(hpo_file):
             elif not header:
                 header = l.strip().split('\t')
 
-                if 'sample_id' not in header:
-                    sys.stderr.write('[ERROR] Could not find "sample_id" in HPO terms file: '+hpo_file+' ...exiting\n')
+                if 'patient_id' not in header:
+                    sys.stderr.write('[ERROR] Could not find "patient_id" in HPO terms file: '+hpo_file+' ...exiting\n')
                     sys.exit(1)
                 if 'hpo_id' not in header:
                     sys.stderr.write('[ERROR] Could not find "hpo_id" in HPO terms file: ' + hpo_file + ' ...exiting\n')
@@ -85,8 +85,8 @@ def hpo_from_hpofile(hpo_file):
                 if 'hpo_name' not in header:
                     sys.stderr.write('Could not find "hpo_name" in HPO terms file: ' + hpo_file + ' ...listing term names as "unspecified"\n')
                     sys.exit(1)
-                if 'affected_status' not in header:
-                    sys.stderr.write('Could not find "affected_status" in HPO terms file: '+hpo_file+' ...assuming all samples are affected\n')
+                if 'patient_status' not in header:
+                    sys.stderr.write('Could not find "patient_status" in HPO terms file: '+hpo_file+' ...assuming all patients are affected\n')
                 if 'hpo_status' not in header:
                     sys.stderr.write('Could not find "hpo_status" in HPO terms file: ' + hpo_file + ' ...assuming all HPO terms are present\n')
                 if 'quality_flag' not in header:
@@ -96,7 +96,7 @@ def hpo_from_hpofile(hpo_file):
 
             if 'hpo_status' in header and v[header.index('hpo_status')].lower() not in ['true', 'yes', 'y', 'present', 'positive']:
                 continue
-            if 'affected_status' in header and v[header.index('affected_status')].lower() not in ['true', 'yes', 'y', 'affected']:
+            if 'patient_status' in header and v[header.index('patient_status')].lower() not in ['true', 'yes', 'y', 'affected']:
                 continue
             if 'quality_flag' in header and v[header.index('quality_flag')].lower() not in ['true', 'yes', 'y', 'pass']:
                 continue
@@ -106,7 +106,7 @@ def hpo_from_hpofile(hpo_file):
             if 'hpo_name' in header:
                 hpo_name = '-'.join(v[header.index('hpo_name')].replace(',', '').replace('|', '').split())
 
-            sample_id = v[header.index('sample_id')]
+            sample_id = v[header.index('patient_id')]
             if sample_id not in hpo_terms:
                 hpo_terms[sample_id] = set()
             hpo_terms[sample_id].add(hpo_id+'|'+hpo_name)
@@ -253,9 +253,9 @@ def create_gene_groups(candidate_genes_list=cfg.script_directory+'/test/phrank/t
                 header = cline.strip().split('\t')
                 continue
             v = cline[:-1].split('\t')
-            if v[header.index('sample_id')] not in candidate_genes:
-                candidate_genes[v[header.index('sample_id')]] = set()
-            candidate_genes[v[header.index('sample_id')]].add((
+            if v[header.index('patient_id')] not in candidate_genes:
+                candidate_genes[v[header.index('patient_id')]] = set()
+            candidate_genes[v[header.index('patient_id')]].add((
                 v[header.index('gene_name')],
                 v[header.index('gene_type')] if 'gene_type' in header else '',
                 v[header.index('diagnosis')] if 'diagnosis' in header else '',
@@ -344,8 +344,6 @@ def candidate_gene_info(cluster_details=cfg.script_directory+'/test/phrank/test_
 
             if True in [value in v[header.index('diagnosis')].lower() for value in ['yes', 'y', 'diagnosis', 'true', '']]:
                 parenthetical += ('|' if len(parenthetical) > 0 else '')+'DIAG'
-            elif 'CANDIDATE' in v[header.index('diagnosis')]:
-                parenthetical += ('|' if len(parenthetical) > 0 else '')+'CAND'
             elif float(v[header.index('pheno_match')]) > 5:
                 parenthetical +=('|' if len(parenthetical) > 0 else '') + str(round(float(v[header.index('pheno_match')]), 2))
 
@@ -426,7 +424,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Redo pathway analysis')
     parser.add_argument('--pairwise_similarity', dest='pairwise_similarity', action='store_true', default=False,
-                        help='Compute all-against-all patient phenotypic similarities from list of per-patient HPO terms.')
+                        help='Compute all-against-all patient phenotypic similarities from list of per-patient ' +
+                             'HPO terms.')
     parser.add_argument('--cluster_patients', dest='cluster_patients', action='store_true', default=False,
                         help='Create patient clusters using similarity scores computed with `--pairwise_similarity`.')
     parser.add_argument('--query_genes', dest='query_genes', action='store_true', default=False,
@@ -436,7 +435,8 @@ if __name__ == "__main__":
     parser.add_argument('--hpo_file', type=str, default=None,
                         help='Full path to a tab-delimited file containing HPO terms per patient')
     parser.add_argument('--similarity_file', type=str, default=None,
-                        help='Full path to a tab-delimited file containing all-against-all patient phenotypic similarity scores')
+                        help='Full path to a tab-delimited file containing all-against-all patient phenotypic ' +
+                             'similarity scores')
     parser.add_argument('--cluster_assignments_file', type=str, default=None,
                         help='Full path to a tab-delimited file containing cluster IDs -> patients in cluster')
     parser.add_argument('--candidate_genes_file', type=str, default=None,
