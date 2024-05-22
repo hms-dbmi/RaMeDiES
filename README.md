@@ -5,17 +5,17 @@ This software package implements three well-calibrated statistical methods for a
 2. genes recurrently impacted by inherited compound heterozygous variants across the cohort
 3. genes harboring significant compound heterozygous variants in individual patients
 
-Our [RaMeDiES wiki](https://github.com/hms-dbmi/RaMeDiES/wiki) also details how we ran our [pathway analysis](https://github.com/hms-dbmi/RaMeDiES/wiki/Pathway-analysis) to find biologically-related groups of genes impacted with 
-candidate variants across phenotypically similar patients.
+Our [RaMeDiES wiki](https://github.com/hms-dbmi/RaMeDiES/wiki) also details how we ran our [pathway analysis](https://github.com/hms-dbmi/RaMeDiES/wiki/Pathway-analysis) to find pathways enriched with
+candidate diagnostic variants across phenotypically similar patients.
 
 If you use RaMeDiES in your work, please cite our publication: 
-> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, J Willett, M Berselli, W Ronchetti, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158v1).
+> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, RI Corona, GdV Carvalho Neto, J Willett, M Berselli, W Ronchetti, SF Nelson, JA Martinez-Agosto, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158v1).
 
 ## :sparkles: Prerequisites
 * Python 3.6+, R 4.1+
 * Python libraries: os, sys, argparse v1.1+, numpy v1.23.3+, scipy v1.91+, rpy2 v3.15.16+, requests v3.31+, urllib3 v1.26.8+
 * R packages: cluster
-* :exclamation: **Operating System:** Linux distribution; compatibility on MacOS is not guaranteed, and Windows is not supported.
+* :exclamation: **Operating System:** Linux or MacOS;  Windows is not supported.
   
 ## :sparkles: Configuration
 Edit the configuration `cfg.py` file to include the full path to your local installation of this repository.
@@ -25,7 +25,7 @@ script_directory = "/full/path/to/github/repo/RaMeDiES/"
 ```
 
 ## :sparkles: Precomputed data files
-We have precomputed per-gene mutational targets for CADD and SpliceAI variant functionality scores with respect to GRCh38/hg38. *The most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`.
+We have precomputed per-gene mutational targets for various variant functionality scores with respect to GRCh38/hg38. *The most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`.
 
 A freeze of the precomputed files used in our initial manuscript submission (2024-02-01) can be downloaded from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE).
 
