@@ -9,7 +9,7 @@ Our [RaMeDiES wiki](https://github.com/hms-dbmi/RaMeDiES/wiki) also details how 
 candidate diagnostic variants across phenotypically similar patients.
 
 If you use RaMeDiES in your work, please cite our publication: 
-> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, RI Corona, GdV Carvalho Neto, J Willett, M Berselli, W Ronchetti, SF Nelson, JA Martinez-Agosto, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158v1).
+> SN Kobren*, MA Moldovan*, R Reimers, D Traviglia, X Li, D Barnum, A Veit, RI Corona, GdV Carvalho Neto, J Willett, M Berselli, W Ronchetti, SF Nelson, JA Martinez-Agosto, R Sherwood, J Krier, IS Kohane, Undiagnosed Diseases Network, SR Sunyaev (2024). "Joint, multifaceted genomic analysis enables diagnosis of diverse, ultra-rare monogenic presentations." _bioRxiv._ doi: [10.1101/2024.02.13.580158](https://www.biorxiv.org/content/10.1101/2024.02.13.580158).
 
 ## :sparkles: Prerequisites
 * Python 3.6+, R 4.1+
