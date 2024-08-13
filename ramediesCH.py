@@ -71,7 +71,7 @@ def parse_arguments():
         and deleteriousness of compound heterozygous variants landing within each gene. For additional information, 
         consult our paper and the GitHub Wiki page.""")
 
-    parser.add_argument('--variant_annots', type=str, default="CI",
+    parser.add_argument('--variant_annots', type=str, default="CI", choices=['C', 'I', 'CI', 'IC'],
                         help="""String of codes for variant annotations:
         'C' for coding,
         'I' for intronic.
@@ -84,8 +84,8 @@ def parse_arguments():
                         help="""Comma-separated list of prefixes of metadata files.
         needed only if metadata_run_mode is enabled""", default='')
 
-    parser.add_argument('--o', type=str, default="out",
-                        help="""Prefix of the output files. Default: out""")
+    parser.add_argument('--o', type=str, default="CH_result",
+                        help="""Prefix of the output files. Default: CH_result""")
 
     parser.add_argument(
         '--coding_snv_thr', type=float, default=1.5,
@@ -113,7 +113,7 @@ def parse_arguments():
         the MAF filter. Default -1.""")
     
     parser.add_argument(
-        '--coding_score', type=str, default="CADD",
+        '--coding_score', type=str, default="CADD", choices=['CADD', 'AlphaMissense', 'REVEL', 'PAI3D'],
         help="""Deleteriousness score type for coding SNP variants.
         Note: non-Phred-scaled CADD scores are ALWAYS used for scoring coding indels 
               (unless the --suppress_indels flag is indicated, in which case no coding indels are included.)
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         stat_lib.write_varcount_dist(varcount_dict, args.o, args.i, args_obj=args)
 
         # Calculating products of variant counts
-        mutnum_prod_dict = stat_lib.mutnum_prod(varcount_dict, args.o, args_obj=args, args.i)
+        mutnum_prod_dict = stat_lib.mutnum_prod(varcount_dict, args.o, args, args.i)
 
         # gene_comphet_mutdict: ENSEMBL ID -> VariantCollection object
         CH_dict = {}

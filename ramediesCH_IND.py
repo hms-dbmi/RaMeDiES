@@ -76,7 +76,7 @@ def parse_arguments():
         information, consult our paper and the GitHub Wiki page.""")
 
     parser.add_argument(
-        '--variant_annots', type=str, default="CI", help="""
+        '--variant_annots', type=str, default="CI", choices=['C', 'I', 'CI', 'IC'], help="""
         String of codes for variant annotations:
         'C' for coding,
         'I' for intronic.
@@ -87,7 +87,7 @@ def parse_arguments():
         help="""Input directory containing processed input variant files.""", default='')
 
     parser.add_argument(
-        '--o', type=str, default="out",
+        '--o', type=str, default="CHIND_result",
         help="""Prefix for output files""")
 
     parser.add_argument(
@@ -118,7 +118,7 @@ def parse_arguments():
         the MAF filter. Default -1.""")
 
     parser.add_argument(
-        '--coding_score', type=str, default="CADD",
+        '--coding_score', type=str, default="CADD", choices=['CADD', 'AlphaMissense', 'PAI3D', 'REVEL'],
         help="""Deleteriousness score type for coding SNP variants.
         Note: non-Phred-scaled CADD scores are ALWAYS used for scoring coding indels 
               (unless the --suppress_indels flag is indicated, in which case no coding indels are included.)

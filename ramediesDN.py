@@ -39,7 +39,7 @@ def parse_arguments():
         in genes hit by de novo mutations. For additional information, consult our paper and
         the GitHub Wiki page.""")
     
-    parser.add_argument('--variant_annots', type=str, default="CI",
+    parser.add_argument('--variant_annots', type=str, default="CI", choices=['C', 'I', 'CI', 'IC'],
         help="""String of codes for variant annotations:
         'C' for coding,
         'I' for intronic.
@@ -52,8 +52,8 @@ def parse_arguments():
         help="""Comma-separated list of prefixes of metadata files.
         Needed only if metadata_run_mode is enabled""", default='')
     
-    parser.add_argument('--o', type=str, default="out",
-        help="""Prefix of the output files. Default: out""")
+    parser.add_argument('--o', type=str, default="DN_result",
+        help="""Prefix of the output files. Default: DN_result""")
     
     parser.add_argument(
         '--coding_snv_thr', type=float, default=0.5,
@@ -82,7 +82,7 @@ def parse_arguments():
         the MAF filter. Default -1.""")
     
     parser.add_argument(
-        '--coding_score', type=str, default="CADD",
+        '--coding_score', type=str, default="CADD", choices=['CADD', 'AlphaMissense', 'PAI3D', 'REVEL'],
         help="""Deleteriousness score type for coding SNP variants.
         Note: non-Phred-scaled CADD scores are ALWAYS used for scoring coding indels 
               (unless the --suppress_indels flag is indicated, in which case no coding indels are included.)
@@ -128,7 +128,11 @@ def parse_arguments():
         this parameter will not affect anything. Default: False.""")
 
     # de novo specific arguments:
-    parser.add_argument('--gene_score', type=str, default="Genebayes",
+    parser.add_argument(
+        '--gene_score', type=str, default="Genebayes",
+        choices=['s_het_R', 's_het_R_low95', 's_het', 's_het_low95', 'Genebayes', 'Genebayes_low95',
+                 'LOEUF', 'PhyloP_prim', 'PhyloP_mamm', 'MisFit_sgene_mis', 'MisFit_sgene_ptv',
+                 'Mouse_knockout', 'OMIM_dom'],
         help="""Gene constraint score used in the weighted FDR procedure. 
         Values:
         1. 's_het_R': Roulette-corrected per-gene mean s_het estimates.
