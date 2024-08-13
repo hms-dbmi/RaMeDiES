@@ -18,25 +18,26 @@ If you use RaMeDiES in your work, please cite our publication:
 * :exclamation: **Operating System:** Linux or MacOS;  Windows is not supported.
   
 ## :sparkles: Configuration
-Edit the configuration `cfg.py` file to include the full path to your local installation of this repository.
+Edit the configuration `cfg.py` file to specify the name of the column in your [input variant files](https://github.com/hms-dbmi/RaMeDiES/wiki/Variant-data-input) corresponding to the deleteriousness score you'd like to use:
 
-```
-script_directory = "/full/path/to/github/repo/RaMeDiES/"
+```python
+vcf_format_dict = {"coding_score" : "CADD-raw"}  # default is CADD-raw
 ```
 
 ## :sparkles: Precomputed data files
 We have precomputed per-gene mutational targets for various variant functionality scores with respect to GRCh38/hg38. *The most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`.
 
-A freeze of the precomputed files used in our initial manuscript submission (2024-02-01) can be downloaded from [Harvard Dataverse](https://doi.org/10.7910/DVN/UISZTE).
-
-* `ens2gene.txt.gz` (136 KB)
-* `pseudogenes.txt.gz` (231 KB)
-* `score_lists_CI.txt.gz` (629 KB)
-* `score_lists_CS.txt.gz` (97 MB)
-* `score_lists_II.txt.gz` (218 KB)
-* `score_lists_IS.txt.gz` (13.35 MB)
-* `shet_table.txt.gz` (489 KB)
-
+* `ens2gene.txt.gz` (133 KB)
+* `pseudogenes.txt.gz` (225 KB)
+* `gene_constraint_scores.txt.gz` (245 KB)
+* `CADD_CI.txt.gz` (614 KB)
+* `CADD_CS.txt.gz` (93 MB)
+* `SpliceAI_II.txt.gz` (213 KB)
+* `SpliceAI_IS.txt.gz` (13 MB)
+* `AlphaMissense_MS.txt.gz` (68 MB)
+* `PAI3D_MS.txt.gz` (63 MB)
+* `REVEL_MS.txt.gz` (67 MB)
+  
 ## :sparkles: RaMeDiES Framework
 Descriptions of, sample code for running, and customizable parameters for the following steps of our statistical framework are detailed in [our wiki](https://github.com/hms-dbmi/RaMeDiES/wiki): 
 
