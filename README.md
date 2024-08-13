@@ -18,10 +18,10 @@ If you use RaMeDiES in your work, please cite our publication:
 * :exclamation: **Operating System:** Linux or MacOS;  Windows is not supported.
   
 ## :sparkles: Configuration
-Edit the configuration `cfg.py` file to include the full path to your local installation of this repository.
+Edit the configuration `cfg.py` file to specify the name of the column in your [input variant files](https://github.com/hms-dbmi/RaMeDiES/wiki/Variant-data-input) corresponding to the deleteriousness score you'd like to use:
 
-```
-script_directory = "/full/path/to/github/repo/RaMeDiES/"
+```python
+vcf_format_dict = {"coding_score" : "CADD-raw"}  # default is CADD-raw
 ```
 
 ## :sparkles: Precomputed data files
