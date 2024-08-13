@@ -1,28 +1,32 @@
 """
-cfg
+cfg.py
 
-config file for ramediesDN
-
-Before using the program, specify the directory in which the tool is located.
-Directory name must end with "/ramedies". Variable script_directory
+Configuration file for RaMeDiES algorithms
 """
 
-# Change this variable to the directory in which the program is located
-script_directory = "/home/sk758/gitrepos/RaMeDiES"
+import os
+
+# Automatically extract current directory (where this script is)
+script_directory = os.path.dirname(os.path.realpath(__file__))
+script_directory = '/'.join(script_directory.split('/')[:-1])
 
 # Paths to files containing mutation rate-score distributions
 # Change the values in this dictionary to incorporate custom annotations.
-# See the manual for details.
-variant_scores_files = {'C': {'S': f"{script_directory}/data/score_lists_CS.txt.gz",
-                              'I': f"{script_directory}/data/score_lists_CI.txt.gz"},
-                        'I': {'S': f"{script_directory}/data/score_lists_IS.txt.gz",
-                              'I': f"{script_directory}/data/score_lists_II.txt.gz"}}
+# See the GitHub wiki for details.
+
+variant_scores_files = {'C': {'S': {"CADD": f"{script_directory}/data/CADD_CS.txt.gz",
+                                    "AlphaMissense": f"{script_directory}/data/AlphaMissense_MS.txt.gz",
+                                    "REVEL": f"{script_directory}/data/REVEL_MS.txt.gz",
+                                    "PAI3D": f"{script_directory}/data/PAI3D_MS.txt.gz"},
+                              'I': f"{script_directory}/data/CADD_CI.txt.gz"},
+                        'I': {'S': f"{script_directory}/data/SpliceAI_IS.txt.gz",
+                              'I': f"{script_directory}/data/SpliceAI_II.txt.gz"}}
 
 # Path to pseudogene/RNA gene/overlapping gene list
 pseudogenes = f"{script_directory}/data/pseudogenes.txt.gz"
 
-# Path to the table containing s_het values
-shet_table = f"{script_directory}/data/shet_table.txt.gz"
+# Path to the table containing GeneBayes, s_het, and other gene constraint values
+gene_score_table = f"{script_directory}/data/gene_constraint_scores.txt.gz"
 
 # Path to the table with ENSEMBL ID-Gene ID matches
 ens2gene = f"{script_directory}/data/ens2gene.txt.gz"
@@ -41,30 +45,56 @@ drop_HR = True
 # For the incorporation of other variant types (such as regulatory region variants), you will need to precompute the
 #  variant score files and include them in the "variant_score_files" dictionary defined above. 
 VEP_cons_dict = {'5_prime_UTR_variant': 'U',
+                 '5_prime_UTR': 'U',
+                 '5PRIME_UTR': 'U',
                  '3_prime_UTR_variant': 'U',
+                 '3_prime_UTR': 'U',
+                 '3PRIME_UTR': 'U',
                  'upstream_gene_variant': 'U',
+                 'upstream': 'U',
                  'downstream_gene_variant': 'U',
+                 'downstream': 'U',
+                 'DOWNSTREAM': 'U',
+                 'regulatory': 'U',
+                 'UPSTREAM': 'U',
                  'intron_variant': 'I',
+                 'intron': 'I',
+                 'INTRONIC': 'I',
                  'splice_acceptor_variant': 'I',
+                 'splice_acceptor': 'I',
                  'splice_donor_variant': 'I',
+                 'splice_donor': 'I',
                  'splice_donor_region_variant': 'I',
                  'splice_region_variant': 'I',
                  'splice_donor_5th_base_variant': 'I',
+                 'splice_donor_5th_base': 'I',
                  'splice_polypyrimidine_tract_variant': 'I',
+                 'splice_polypyrimidine_tract': 'I',
+                 'splice': 'I',
+                 'CANONICAL_SPLICE': 'I',
+                 'SPLICE_SITE': 'I',
                  'synonymous_variant': 'S',
+                 'synonymous': 'S',
                  'stop_retained_variant': 'C',
                  'stop_lost': 'C',
                  'stop_gained': 'C',
-                 'start_lost': 'C',
-                 'start_retained_variant': 'C',
-                 'missense_variant': 'C',
-                 'inframe_deletion': 'C',
-                 'inframe_insertion': 'C',
-                 'frameshift_variant': 'C',
-                 'protein_altering_variant': 'C',
+                 'STOP_GAINED': 'C',
+                 'start_lost': 'M',
+                 'STOP_LOST': 'C',
+                 'start_retained_variant': 'M',
+                 'missense_variant': 'M',
+                 'missense': 'M',
+                 'inframe_deletion': 'M',
+                 'inframe_insertion': 'M',
+                 'frameshift_variant': 'M',
+                 'FRAME_SHIFT': 'M',
+                 'INFRAME': 'M',
+                 'protein_altering_variant': 'M',
                  'incomplete_terminal_codon_variant': 'C',
                  'coding_sequence_variant': 'C',
                  'coding_transcript_variant': 'C',
+                 'NON_SYNONYMOUS': 'C',
+                 'NMD': 'C',
                  'regulatory_region': 'O',
                  'transcript_ablation': 'O',
                  'transcript_amplification': 'O',
@@ -72,6 +102,8 @@ VEP_cons_dict = {'5_prime_UTR_variant': 'U',
                  'feature_truncation': 'O',
                  'mature_miRNA_variant': 'O',
                  'non_coding_transcript_variant': 'O',
+                 'non_coding_exon': 'O',
+                 'non_coding': 'O',
                  'TFBS_ablation': 'O',
                  'TFBS_amplification': 'O',
                  'TF_binding_site_variant': 'O',
@@ -79,7 +111,9 @@ VEP_cons_dict = {'5_prime_UTR_variant': 'U',
                  'regulatory_region_amplification': 'O',
                  'regulatory_region_variant': 'O',
                  'intergenic_variant': 'O',
+                 'intergenic': 'O',
                  'sequence_variant': 'O',
+                 'NONCODING_CHANGE': 'O',
                  '': None}
 
 # Dictionary specifying inheritance pattern keywords 
@@ -100,7 +134,7 @@ vcf_format_dict = {"chrom": "chromosome",
                    "SAI_AL": "SpliceAI_acceptor-loss-score",
                    "SAI_DG": "SpliceAI_donor-gain-score",
                    "SAI_DL": "SpliceAI_donor-loss-score",
-                   "CADD": "CADD-raw",  # CADD score of a mutation
+                   "coding_score": "CADD-raw",  # CADD score of a mutation
                    "ensembl_gene_id": "ensembl_gene_id",  # ENSEMBL gene ID
                    "MAF": "MAF",
                    "inherited_from": "inherited_from",  # Parent annotation
@@ -118,6 +152,13 @@ qual_value_dict = {"high": True,
 # 1st letter: 'C' for coding, 'I' for intronic
 # 2nd letter: 'S' for SNP, 'I' for indel
 var_annot_list = [('C', 'S'), ('C', 'I'), ('I', 'S'), ('I', 'I')]
+
+# Identifiers used in thresholding of scores of input variants
+#   see parse_variant_lib/get_score_val function
+var_type_to_var_str = {('C', 'S'): 'C',
+                       ('C', 'I'): 'CInd',
+                       ('I', 'S'): 'I',
+                       ('I', 'I'): 'I'}
 
 # output file suffix: total number of DENOVO variants observed across cohort for each of 4 variant types
 varcount_sums_DN = "denovo_variant_counts"

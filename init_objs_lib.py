@@ -32,18 +32,15 @@ def init_varcount_dict():
 # Function that parses a precomputed mutational target file for CADD or SpliceAI score bins
 # gene_instances: variant annotation -> ENSEMBL ID -> Gene instance (as specified in stat_lib)
 def parse_variant_scores_file(variant_annot,
+							  var_score_file_name,
 							  Gene_inst_dict,
 							  score_thr):
 
 	# total_mu is a normalizing value for mutational targets
 	# After the parsing, all mutational targets are normalized to sum up to unit
 	total_mu = 0
-	# Input files are specified in cfg.py
-	# variant_annot[0]: 'C'/'I' for coding or intronic variant types
-	# variant_annot[1]: 'S'/'I', for SNP or indel variant types
-	infile = cfg.variant_scores_files[variant_annot[0]][variant_annot[1]]
-	with gzip.open(infile, 'rt') as inh:
-		print(f"Parsing per-gene score-mutation rate distributions from: {infile}")
+	with gzip.open(var_score_file_name, 'rt') as inh:
+		print(f"Parsing per-gene score-mutation rate distributions from: {var_score_file_name}")
 		current_ID = None
 		for inh_str in inh:
 			if inh_str.startswith('#'):
@@ -77,10 +74,11 @@ def parse_variant_scores_file(variant_annot,
 			current_mu_list.append(eval(inh_str[1]))
 
 	# Processing of the final gene
-	Gene_inst_dict[variant_annot][current_ID] = sl.Gene(current_score_list,
-														current_mu_list)
+	if current_score_list:
+		Gene_inst_dict[variant_annot][current_ID] = sl.Gene(current_score_list,
+															current_mu_list)
 
-	total_mu += Gene_inst_dict[variant_annot][current_ID].mut_targ_arr[0]
+		total_mu += Gene_inst_dict[variant_annot][current_ID].mut_targ_arr[0]
 
 	# Normalization of mutational targets
 	for ENS_ID, Gene_obj in Gene_inst_dict[variant_annot].items():
@@ -93,6 +91,7 @@ def parse_variant_scores_file(variant_annot,
 # total_mu_dict: variant annotation -> total mutational target of that annotation
 def parse_variant_scores_files(score_thr_dict,
 							   consequence_list,
+							   coding_score,
 			  				   suppress_indels):
 	# Initialization of gene_instances
 	# gene_instances:
@@ -107,12 +106,27 @@ def parse_variant_scores_files(score_thr_dict,
 		if suppress_indels and variant_annot[1] == 'I':
 			continue
 
-		score_thr = score_thr_dict[variant_annot[0]]
+		# Separate processing of Coding InDels
+		if variant_annot == ('C', 'I'):
+			score_thr = score_thr_dict["CInd"]
+		else:
+			score_thr = score_thr_dict[variant_annot[0]]
+
+		# Input files are specified in cfg.py
+		# variant_annot[0]: 'C'/'I' for coding or intronic variant types
+		# variant_annot[1]: 'S'/'I', for SNP or indel variant types
+		# coding_score: name of the score for coding SNPs provided under 
+		#	--coding_score input parameter
+		if variant_annot == ('C', 'S'):
+			var_score_file_name = cfg.variant_scores_files['C']['S'][coding_score]
+		else:
+			var_score_file_name = cfg.variant_scores_files[variant_annot[0]][variant_annot[1]]
 		# A lot of code in this tool has the same structure:
 		# Function that parses a list of files -> 
 		#	function parsing a single file ->
 		#	(sometimes) some functions processing a single line
-		parse_variant_scores_file(variant_annot, 
+		parse_variant_scores_file(variant_annot,
+								  var_score_file_name, 
 								  Gene_inst_dict, 
 								  score_thr)
 
@@ -153,16 +167,44 @@ def make_ENS2GeneID_dict(forward=True):
 # Loads s_het bin enrichment values from a file specified in cfg.py
 # Enrichment values are the proportions of exclusively dominant OMIM genes
 #	in s_het deciles
-def load_s_het_bins():
-	shet_dict = {}
-	with gzip.open(cfg.shet_table, 'rt') as inh:
+def load_gene_score_bins(scoreID = "s_het_R"):
+	gene_score_dict = {}
+	with gzip.open(cfg.gene_score_table, 'rt') as inh:
 		for s in inh:
-			if s.startswith('#'):
-				continue
 			s = s.strip().split()
-			shet_dict[s[2]] = eval(s[11])
-	# s_het_dict: ENSEMBL_ID -> s_het enrichment
-	return shet_dict
+			if s[0] == 'ensembl_gene_id':
+				if scoreID not in s:
+					raise AssertionError(f"ERROR: Gene score ID {scoreID} misspecified")
+				score_index = s.index(scoreID)
+				continue
+
+			gene_score_dict[s[0]] = eval(s[score_index])
+	# gene_score_dict: ENSEMBL_ID -> score bin enrichment for dominant disease-
+	#	causing genes
+	return gene_score_dict
+
+# Write parameters used in the run to an intermediate file
+def write_run_info(file_obj, args_obj):
+	"""
+	:param file_obj: python file object corresponding to an intermediate output file
+	:args_obj: argparse arguments object with run specifications supplied by the user
+	"""
+	file_obj.write(f"### Information about RaMeDiES run ID {args_obj.o}\n")
+	file_obj.write("### Do not discard this header when sharing intermediate outputs\n")
+	file_obj.write(f"### VARIANT ANNOTATIONS: {args_obj.variant_annots}\n")
+	file_obj.write(f"### INDEL SUPPRESSION: {args_obj.suppress_indels}\n")
+	file_obj.write(f"### ONLY MISSENSE CODING SNPS: {args_obj.missense_run}\n")
+	file_obj.write(f"### MAF CUTOFF: {args_obj.MAF}\n")
+	if 'C' in args_obj.variant_annots:
+		file_obj.write(f"### CODING SNP SCORE: {args_obj.coding_score}\n")
+		file_obj.write(f"### CODING SNP SCORE THRESHOLD: {args_obj.C_thr}\n")
+	if 'I' in args_obj.variant_annots:
+		file_obj.write(f"### INTRONIC SCORE: SpliceAI\n")
+		file_obj.write(f"### INTRONIC SCORE THRESHOLD: {args_obj.SAI_thr}\n")
+	if not args_obj.suppress_indels:
+		file_obj.write(f"### CODING INDEL SCORE: CADD\n")
+		file_obj.write(f"### CODING INDEL SCORE THRESHOLD: {args_obj.CI_thr}\n")
+	
 
 
 # Written on 01.23.2024 by Mikhail Moldovan, HMS DBMI

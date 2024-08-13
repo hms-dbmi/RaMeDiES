@@ -37,31 +37,43 @@ from os import path, remove
 from scipy.stats import norm, binom, poisson
 
 
-###################
-##### CLASSES #####
-###################
+# ==========================================================================================
+# Universal Class Definitions
+# ==========================================================================================
 
-# Class with instances containing information about particular variants
 class Variant:
-    def __init__(self,
-                 mut_id_tuple,
-                 var_annot,
-                 score,
-                 inher,
-                 proband_id=None):
-        # mut_id_tuple: (chromosome, position, reference allele, alternative allele)
+    """
+    Variant contains relevant information about a particular variant.
+
+    Attributes:
+        mut_id_tuple (str, str, str, str): chromosome, 1-indexed position, reference allele, alternate allele.
+        var_annot (char, char): variant type 'C' for coding or 'I' for intronic; 'S' for SNV or 'I' for indel.
+        score (float): deleteriousness score of variant.
+        inher (str): variant inheritance; M = from mom, D = from dad, DN = neither/de novo.
+        proband_id (str): name of VCF file serving as a proband identifier.
+    """
+
+    def __init__(self, mut_id_tuple, var_annot, score, inher, proband_id=None):
+        """
+        Initializes Variant with provided variant attributes.
+
+        Args:
+            mut_id_tuple (str, str, str, str): chromosome, 1-indexed position, reference allele, alternate allele.
+            var_annot (char, char): variant type 'C' for coding or 'I' for intronic; 'S' for SNV or 'I' for indel.
+            score (float): deleteriousness score of variant.
+            inher (str): variant inheritance; M = from mom, D = from dad, DN = neither/de novo.
+            proband_id (str): name of VCF file serving as a proband identifier.
+        """
         self.mut_id_tuple = mut_id_tuple
-        # Variant annotation: variant annotation as specified in cfg/var_annot_list
         self.var_annot = var_annot
-        # Variant score
         self.score = score
-        # Inheritance as specified in cfg/inherited_from_dict
         self.inher = inher
-        # Name of a VCF file serving as a proband identifier
         self.proband_id = proband_id
 
     def make_mut_id(self):
-        # mut_id: chromosome:reference allele_position_alternative allele
+        """
+        :return: (str) corresponding to the variant ID, formatted as chromosome:ref-allele_position_alt-allele
+        """
         chrom = self.mut_id_tuple[0]
         ref = self.mut_id_tuple[2]
         pos = self.mut_id_tuple[1]
@@ -70,48 +82,59 @@ class Variant:
         return mut_id
 
     def print_info(self):
-        # Outputs a string with all attributes of a class instance
+        """
+        :return: (str) containing all information contained in the Variant class
+        """
         mut_id = self.make_mut_id()
-        va = f"{self.var_annot[0]}{self.var_annot[1]}"
+        va = f"{self.var_annot[0]}{self.var_annot[1]}"  # variant annotation e.g., CI for coding indel
         return f"{mut_id}|{va}|{self.score}|{self.inher}|{self.proband_id}"
 
 
-# Class containing score-mutational target distributions for each gene
-#	and each annotation class (coding/intronic and SNP/indel)
-# In addition, it is used to store variant information in the form of a list of
-#	Variant class instances.
 class Gene:
+    """
+    Gene contains per-gene mutational target distributions by annotation class (coding/intronic and SNV/indel)
+    Gene also stores observed variants as a list of Variant instances
+
+    Attributes:
+        score_arr [float]: array of sorted (ascending) values of unique deleteriousness scores present in gene
+        mut_targ_arr [float]: array of corresponding mutational targets for each unique deleteriousness score
+            computed as the total mutational target of all scores equal to or higher than that score
+        gene_mu (float): the maximum mutational target of this gene (i.e., all variants included)
+        gene_length (int): total number of unique deleteriousness scores in this gene, unrelated to actual gene length
+        vars [Variant]: list of variants observed in this gene in a proband
+        mu_list [float]: list of mutational targets of all variants of a specific type
+    """
     def __init__(self, score_arr, mut_targ_arr):
-        # score_arr: array of scores (CADD or SpliceAI),
-        # mut_targ_arr: array of mutational targets with scores
-        #	equal or higher than the corresponding score
-        # Read from ../data/score_lists_*.gz files
+        """
+        Args:
+            score_arr [float]: read from precomputed data/score_lists*gz files
+            mut_targ_arr [float]: read from precomputed data/score_lists*gz files
+        """
         self.score_arr, self.mut_targ_arr = zip(*sorted(zip(score_arr, mut_targ_arr)))
         self.mut_targ_arr = np.array(self.mut_targ_arr)
         self.gene_mu = self.mut_targ_arr[0]
-
-        # gene_length: length of the score vector.
-        # Not related to the length of a given gene
         self.gene_length = len(self.mut_targ_arr)
-
-        # Array of variants from proband VCFs
-        # Updated in parse_VCF_lib/parse_variant_input
-        self.vars = []
-
-        # List of mutational targets of all variants of a specific type
+        self.vars = []  # updated by the parse_VCF_lib/parse_variant_input function
         self.mu_list = []
 
     def normalize_mut_targs(self, mut_targ_norm=1.0):
-        # Normalize mutational targets so that the mutatinal target of
-        # the whole genome would be unit.
-        # Normalizations are generated by parse_variant_scores_files function
-        # as total_mu_dict dictionary
+        """
+        Normalize mutational targets so that the mutational target of the entire genome will be 1.
+        Normalizations are generated by parse_VCF_lib/parse_variant_scores_files function as total_mu_dict dictionary
+
+        Args:
+            mut_targ_norm (float): normalize mutational targets to sum to this value (default: 1.0)
+        """
         self.mut_targ_arr = self.mut_targ_arr / mut_targ_norm
         self.gene_mu = self.mut_targ_arr[0]
 
     def get_mu_from_score(self, score):
-        # Infer a mutational target in a gene corresponding to a given score
-        # Uses binary search in a sorted score array
+        """
+        :return: the mutational target in this gene corresponding to a given score (search binary search)
+
+        Args:
+            score (int): deleteriousness score to return a corresponding mutational target for
+        """
         if self.score_arr[0] >= score:
             return self.mut_targ_arr[0]
         elif self.score_arr[-1] < score:
@@ -141,11 +164,14 @@ class Gene:
 
         return self.mut_targ_arr[ind_low]
 
-    def calculate_muttargs_DN(self, sum_values=False):
-        # Calculates mutational targets going into the y statistic for a single annotation
-        # Used only in the de novo regime
-        # mu_list: list of mutational targets, which is then printed into a log file
-        self.mu_list = []
+    def calculate_muttargs_denovo(self, sum_values=False):
+        """
+        :return: the mutational target for the y statistic for a single annotation (used only in the de novo regime)
+
+        Args:
+            sum_values (bool): return the sum of mutational targets rather than the list (default: False)
+        """
+        self.mu_list = []  # list of mutational targets which is printed into a log file
         for var in self.vars:
             mu = self.get_mu_from_score(var.score)
             self.mu_list.append((self.gene_mu - mu) / self.gene_mu)
@@ -156,22 +182,41 @@ class Gene:
         return self.mu_list
 
 
-##################################################
-##### COMPOUND HETEROZYGOTE ANALYSIS CLASSES #####
-# The following classes are used only in ramediesCH and ramedies_CH_IND
+# ==========================================================================================
+# Compound Heterozygous Class Definitions (used by RaMeDiES-CH and RaMeDiES-IND)
+# ==========================================================================================
 
-# Class with instances corresponding to the CH variants
-# Individual variants are stored as instances of Variant class
 class CH_variant:
-    def __init__(self, Variant_obj_tuple, ENS_ID):
-        # Variant_obj_tuple: (paternal variant, maternal variant)
+    """
+    CH_variant contains relevant information for a compound heterozygous variant pair
+
+    Attributes:
+        var_P (Variant): paternally inherited Variant
+        var_M (Variant): maternally inherited variant
+        ensembl_gene_id (str): Ensembl gene ID where the variant is found
+        mu (float): maximum mutational target of maternally/paternally inherited variants
+        mu2 (float): normalized squared mutational target corresponding to the compound heterozygous variant pair
+    """
+    def __init__(self, Variant_obj_tuple, ensembl_gene_id):
+        """
+        Args:
+            Variant_obj_tuple ((Variant, Variant)): pair of paternally and maternally inherited variants in a gene
+            ensembl_gene_id: Ensembl gene ID where the variants were found in trans
+        """
         self.var_P = Variant_obj_tuple[0]
         self.var_M = Variant_obj_tuple[1]
-        # ENSEMBL ID is stored
-        self.ENS_ID = ENS_ID
+        self.ENS_ID = ensembl_gene_id
+        self.mu = None
+        self.mu2 = None
 
-    # Mutational target of a CH variant
     def muttarg(self, Gene_obj_dict, norm=None):
+        """
+        :return: mutational target of the compound heterozygous variant
+
+        Args:
+            Gene_obj_dict (dict): variant annotation (e.g., CI) -> Ensembl gene ID -> Gene (object)
+            norm: normalization factor to scale squared mutational targets
+        """
         # Gene_obj_dict: variant annotation -> ENSEMBL ID -> Gene object
         Gene_obj_P = Gene_obj_dict[self.var_P.var_annot][self.ENS_ID]
         Gene_obj_M = Gene_obj_dict[self.var_M.var_annot][self.ENS_ID]
@@ -181,55 +226,75 @@ class CH_variant:
         if not norm:
             norm = np.max([Gene_obj_P.gene_mu ** 2, Gene_obj_M.gene_mu ** 2])
 
-        # Raw CH mutational target
-        self.mu = np.max([mu_P, mu_M])
-        # CH mutational target within a gene
-        self.mu2 = self.mu ** 2 / norm
+        self.mu = np.max([mu_P, mu_M])  # unadjusted mutational target of compound heterozygous variant
+        self.mu2 = self.mu ** 2 / norm  # compound heterozygous mutational target with respect to the gene
 
         return self.mu2
 
-    # Print CH variant information
     def print_info(self):
+        """
+        :return: (str) corresponding to paternal variant & maternal variant information
+        """
         info_P = self.var_P.print_info()
         info_M = self.var_M.print_info()
         return f"{info_P}&{info_M}"
 
 
-# Class that stores information about individual and CH variants
 class VariantCollection:
-    def __init__(self, ENS_ID, Gene_obj_dict):
-        # Sort the variants by inheritance
-        # Uses variants from Gene_obj_dict as inputs
+    """
+    VariantCollection stores information about singular and compound heterozygous variants
+
+    Attributes:
+        P_vars ({Variant}): set of paternally inherited variants
+        M_vars ({Variant}): set of maternally inherited Variants
+        CH_list ([CH_variant]): list of all unique compound heterozygous variant pair objects in this gene
+        ensembl_gene_id (str): Ensembl gene ID
+        y (str): y statistic corresponding to the most surprising compound heterozygous variant mutational target
+                 in this gene (scaled with respect to the genome)
+    """
+    def __init__(self, ensembl_gene_id, Gene_obj_dict):
+        """
+        Sort the variants present in Gene_obj_dict by inheritance
+
+        Args:
+            ensembl_gene_id (str): Ensembl gene ID
+            Gene_obj_dict (dict): variant annotation (e.g., CI) -> Ensembl gene ID -> Gene (object)
+        """
         self.P_vars = {}
         self.M_vars = {}
         for va in init_objs_lib.variant_type_iter():
-            if not Gene_obj_dict[va].get(ENS_ID):
+            if not Gene_obj_dict[va].get(ensembl_gene_id):
                 continue
 
-            Gene_obj = Gene_obj_dict[va][ENS_ID]
+            Gene_obj = Gene_obj_dict[va][ensembl_gene_id]
             for Variant_obj in Gene_obj.vars:
+
                 if Variant_obj.inher == 'P':
                     if not self.P_vars.get(Variant_obj.proband_id):
                         self.P_vars[Variant_obj.proband_id] = []
                     self.P_vars[Variant_obj.proband_id].append(Variant_obj)
+
                 elif Variant_obj.inher == 'M':
                     if not self.M_vars.get(Variant_obj.proband_id):
                         self.M_vars[Variant_obj.proband_id] = []
                     self.M_vars[Variant_obj.proband_id].append(Variant_obj)
-        # CH_list: list of CH_variant objects
-        # Created by the make_CH_var_list method of this class
-        self.CH_list = []
-        self.ENS_ID = ENS_ID
 
-    def make_CH_var_list(self, Gene_obj_dict):
-        # Finds all CH variants in a specific gene
-        # Returns the list of Ch variants with the smallest
-        # mutational targets per proband.
+        self.CH_list = []
+        self.ENS_ID = ensembl_gene_id
+        self.y = None
+
+    def make_comphet_var_list(self, Gene_obj_dict):
+        """
+        :return: list of compound heterozygous variant with the smallest mutational target per gene in this proband
+
+        Args:
+            Gene_obj_dict (dict): variant annotation (e.g., CI) -> Ensembl gene ID -> Gene (object)
+        """
         if self.P_vars == {} or self.M_vars == {}:
             return None
 
+        # for each proband, find all compound heterozygous variant pairs (trans within a gene)
         per_proband_CHs = {}
-        # For each proband, find all CH variants within a given gene
         for proband_id, Variant_obj_list_P in self.P_vars.items():
             Variant_obj_list_M = self.M_vars.get(proband_id)
             if not Variant_obj_list_M:
@@ -247,8 +312,10 @@ class VariantCollection:
             mu2_top = sorted(list(CH_dict.keys()))[0]
             self.CH_list.append(CH_dict[mu2_top])
 
-    def calc_CH_y(self):
-        # Calculate the per-cohort y statistic
+    def calc_comphet_y(self):
+        """
+        :return: the cohort-wide y statistic
+        """
         y = 0
         for CH_obj in self.CH_list:
             y += 1 - CH_obj.mu2
@@ -257,42 +324,24 @@ class VariantCollection:
         return y
 
 
-#####################
-##### FUNCTIONS #####
-#####################
+# ==========================================================================================
+# Write and load summary statistics files containing denovo VARIANT COUNT information
+# ==========================================================================================
 
-# Count genes in gene_instances
-# Produces Bonferroni correction factors for the outputs of ramediesDN and 
-#	ramediesCH master scripts
-def count_genes(Gene_inst_dict, return_dict=False):
-    ENS_ID_dict = {}
-    for va in init_objs_lib.variant_type_iter():
-        for ENS_ID in Gene_inst_dict[va].keys():
-            ENS_ID_dict[ENS_ID] = True
-    if return_dict:
-        return ENS_ID_dict
+def write_by_annot_varcount(by_annot_varcount_dict, outfile_mask, args_obj):
+    """
+    :param by_annot_varcount_dict: inheritance type (e.g., M for maternal) -> variant type (e.g., CI for coding indels)
+                                   -> variant count (number of variants of this type)
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param args_obj: dictionary of parsed command-line arguments
+    :return: None, write variant counts by variant type to outfile
+    """
 
-    return len(ENS_ID_dict.keys())
-
-
-#####################
-# Variant count block
-
-# A set of functions used to read and write files containing by-annotation 
-# 	variant counts. In the default runs of ramediesDN and ramediesCH, the files 
-#	will be produced from sets of input VCFs
-# In the metadata runs, these files will be used as inputs
-
-# Write by-annotation variant count 
-def write_by_annot_varcount(by_annot_varcount_dict, outfile_mask):
-    # by_annot_varcount_dict: inheritance ID (specified in cfg.inherited_from_dict) ->
-    #	variant annotation -> variant count. Used in ramediesDN
-    # outfile_mask: identifier of the output file specified by the user
-    #	via the --o option
     outfile_name = f"{outfile_mask}_{cfg.varcount_sums_DN}.txt"
 
     with open(outfile_name, 'w') as outh:
         outh.write('# De novo mutation count by variant type across cohort\n')
+        init_objs_lib.write_run_info(outh, args_obj)
         outh.write("inheritance\tvariant_type\tdenovo_mutation_count\n")
         for inher, var_count_dict in by_annot_varcount_dict.items():
             for var_annot, var_count in by_annot_varcount_dict[inher].items():
@@ -302,12 +351,15 @@ def write_by_annot_varcount(by_annot_varcount_dict, outfile_mask):
     print(f"By-annotation variant counts written to: {outfile_name}")
 
 
-# Make the by-annotation variant count dictionar (by_annot_varcount_dict)
-# by_annot_varcount_dict: inheritance ID (specified in cfg.inherited_from_dict) ->
-#	variant annotation -> variant count. Used in ramediesDN
-def make_by_annot_varcount_dict(varcount_dict, outfile_mask):
-    # varcount_dict: individual ID (file name) -> variant annotation -> # variants
-    # outfile_mask: identifier of the output file specified by the user
+def make_by_annot_varcount_dict(varcount_dict, outfile_mask, args_obj):
+    """
+    :param varcount_dict: individual ID (filename) -> inheritance type (e.g., M for maternal) ->
+                          variant type (e.g., CI for coding indels) -> # variants of this type
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param args_obj: dictionary of parsed command-line arguments
+    :return: the "by_annot_varcount_dict" used as an argument to above function "write_by_annot_varcount"
+    """
+
     by_annot_varcount_dict = {}
     for ind_id, ind_varcount in varcount_dict.items():
         for inher, inher_dict in ind_varcount.items():
@@ -316,25 +368,26 @@ def make_by_annot_varcount_dict(varcount_dict, outfile_mask):
             for va in cfg.var_annot_list:
                 by_annot_varcount_dict[inher][va] += ind_varcount[inher][va]
 
-    write_by_annot_varcount(by_annot_varcount_dict, outfile_mask)
+    write_by_annot_varcount(by_annot_varcount_dict, outfile_mask, args_obj)
     return by_annot_varcount_dict
 
 
-# Load variant counts from the output of write_by_annot_varcount
-# Updates the by_annot_varcount_dict initiated by the 
-#	load_by_annot_varcount_dict function call
 def load_varcount_from_file(by_annot_varcount_dict,
                             input_ID,
                             variant_annots,
                             suppress_indels_bool):
-    # by_annot_varcount_dict: inheritance ID (specified in cfg.inherited_from_dict) ->
-    #	variant annotation -> variant count
-    # input_ID: identifier of the input file specified by the user via the --M parameter
-    # variant_annots: variant annotations specified by the user via the --variant_annots
-    #	parameter of one of the master scripts
+    """
+    :param by_annot_varcount_dict: inheritance type (e.g., M for maternal) -> variant type (e.g., CI for coding indels)
+                                   -> variant count (number of variants of this type)
+    :param input_ID: summary statistics input file ID (initially produced by the "write_by_annot_varcount" function),
+                     specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated "by_annot_varcount_dict" used as an argument to above function "write_by_annot_varcount"
+    """
+
     infile_name = f"{input_ID}_{cfg.varcount_sums_DN}.txt"
 
-    # Checking the existence of the input file
     if not path.isfile(infile_name):
         raise AssertionError(f"Variant count file {infile_name} does not exist")
 
@@ -348,18 +401,18 @@ def load_varcount_from_file(by_annot_varcount_dict,
                 continue
 
             vc_str = vc_str.strip().split()
-            # 1st column: inheritance code (cfg.inherited_from_dict)
-            inher = vc_str[0]
-            # 2nd column: variant annotation (cfg.var_annot_list)
-            var_annot = (vc_str[1][0], vc_str[1][1])
+
+            inher = vc_str[0]  # 1st column: inheritance code (cfg.inherited_from_dict)
+
+            var_annot = (vc_str[1][0], vc_str[1][1])  # 2nd column: variant annotation (cfg.var_annot_list)
             if not var_annot[0] in variant_annots:
                 continue
             if suppress_indels_bool and var_annot[1] == 'I':
                 continue
-            # 3rd column: variant count
-            varcount = eval(vc_str[2])
-            # by_annot_varcount_dict update
-            if not by_annot_varcount_dict.get(inher):
+
+            varcount = eval(vc_str[2])  # 3rd column: variant count
+
+            if not by_annot_varcount_dict.get(inher):  # by_annot_varcount_dict update
                 by_annot_varcount_dict[inher] = init_objs_lib.init_varcount_dict()
             by_annot_varcount_dict[inher][var_annot] += varcount
 
@@ -367,13 +420,15 @@ def load_varcount_from_file(by_annot_varcount_dict,
     return by_annot_varcount_dict
 
 
-# Load variant counts from the outputs of write_by_annot_varcount
-# Constructs a summary by_annot_varcount_dict from multiple inputs
 def load_by_annot_varcount_dict(input_IDs, variant_annots, suppress_indels_bool):
-    # input_ID: comma-separated identifiers of the input file specified by the
-    #	user via the --M parameter
-    # variant_annots: variant annotations specified by the user via the --variant_annots
-    # suppress_indels_flag: bool specified by the user
+    """
+    :param input_IDs: comma-separated list of summary statistics input file IDs (initially produced by the
+                      "write_by_annot_varcount" function), specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated "by_annot_varcount_dict" used as an argument to above function "write_by_annot_varcount"
+    """
+
     input_IDs = input_IDs.split(',')
     by_annot_varcount_dict = {}
     for input_ID in input_IDs:
@@ -385,18 +440,20 @@ def load_by_annot_varcount_dict(input_IDs, variant_annots, suppress_indels_bool)
     return by_annot_varcount_dict
 
 
-# Write the variant count distribution
-# Although this distribution is not used in any of the analyses,
-#	it may still be informative about the quality of calling in the cohort
-def write_varcount_dist(varcount_dict, outfile_mask, var_annots, score_thr_dict, input_directory='<unspecified>'):
-    # varcount_dict: individual ID (file name) -> variant annotation -> # variants
-    # outfile_mask: identifier of the output file specified by the user
-    # var_annots: variant annotations specified by the user via the --variant_annots
-    #	parameter of one of the master scripts
-    # score_threshold_dict: score thresholds specified by the user
+def write_varcount_dist(varcount_dict,
+                        outfile_mask, 
+                        input_directory='<unspecified>',
+                        args_obj=None):
+    """
+    :param varcount_dict: individual ID (filename) -> inheritance type (e.g., M for maternal) ->
+                          variant type (e.g., CI for coding indels) -> # variants of this type
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param input_directory: directory containing all tab-delimited input variant files per individual
+    :param args_obj: dictionary of parsed command-line arguments
+    :return: None, write variant count distribution to file. NOTE: this is not used in any analysis, but may
+             be useful for quality control analyses of variant calling across the cohort
+    """
 
-    # Constructing variant count distribution
-    # varcount_dist: inheritance -> variant annotation -> variant number
     varcount_dist = {}
     suffix = 'comphet'
     for file_name, inher_dict in varcount_dict.items():
@@ -415,9 +472,7 @@ def write_varcount_dist(varcount_dict, outfile_mask, var_annots, score_thr_dict,
     # Printing the variant count distribution to the output
     with open(f"{outfile_name}", 'w') as outh:
         outh.write('# Variant count distribution computed from input variant files in '+input_directory+'\n')
-        outh.write(f"# variant_annotations:\t{var_annots}\n")
-        outh.write(f"# CADD_threshold:\t{score_thr_dict['C']}\n")
-        outh.write(f"# SpliceAI_threshold:\t{score_thr_dict['I']}\n")
+        init_objs_lib.write_run_info(outh, args_obj)
         outh.write("inheritance\tvariant_type\tvariant_count\tnumber_samples\n")
         for inher, va_dict in varcount_dist.items():
             for va, dist_dict in va_dict.items():
@@ -429,29 +484,26 @@ def write_varcount_dist(varcount_dict, outfile_mask, var_annots, score_thr_dict,
     print(f"Variant count distributions written to: {outfile_name}")
 
 
-#####################
-# Mutational target block
+# ==========================================================================================
+# Write and load summary statistics files containing denovo MUTATIONAL TARGET information
+# ==========================================================================================
 
-# A set of functions used to read and write mutational target files
-# In the default runs of ramediesDN and ramediesCH, the files 
-#	will be produced from sets of input VCFs
-# In the metadata runs, these files will be used as inputs
-
-# Loads mutational targets from a single intermediate output file
-# Updates the already initialized gene_instances
-# Is called by the load_muttargs_from_filelist function
 def load_muttargs_from_file(Gene_inst_dict,
-                            input_ID,
+                            input_file_id,
                             variant_annots,
                             suppress_indels_bool):
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # input_ID: one of the intermediate output IDs specified by the user
-    # var_annots: variant annotations specified by the user via the --variant_annots
-    #	parameter of one of the master scripts
-    # suppress_indels_flag: bool specified by the user
-    #	(see --help menus of master scripts for details)
+    """
+    Iteratively called by load_muttargs_from_filelist function below
 
-    infile_name = f"{input_ID}_{cfg.muttargs_list_DN_ID}.txt"
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param input_file_id: summary statistics input file ID (initially produced by the "write_muttargs" function),
+                     specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated (previously initialized) "Gene_inst_dict" used as an argument to below function "write_muttargs"
+    """
+
+    infile_name = f"{input_file_id}_{cfg.muttargs_list_DN_ID}.txt"
     if not path.isfile(infile_name):
         raise AssertionError(f"mutational target file {infile_name} does not exist")
 
@@ -490,138 +542,186 @@ def load_muttargs_from_file(Gene_inst_dict,
     return Gene_inst_dict
 
 
-# Iterates over intermediate output file IDs specified by the user
-# For each ntermediate output file calls load_muttargs_from_file
-# Called if --metadata_run_mode is enabled in ramediesDN and 
-#	ramediesCH
 def load_muttargs_from_filelist(Gene_inst_dict,
-                                input_IDs,
+                                input_file_list,
                                 variant_annots,
                                 suppress_indels_bool):
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # input_ID: List of intermediate output IDs specified by the user
-    # var_annots: variant annotations specified by the user via the --variant_annots
-    #	parameter of one of the master scripts
-    # suppress_indels_flag: bool specified by the user
-    #	(see --help menus of master scripts for details)
+    """
+    Called if --metadata_run_mode is enabled by cohort recurrence methods RaMeDiES-DN or RaMeDiES-CH
 
-    input_IDs = input_IDs.split(',')
-    for input_ID in input_IDs:
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param input_file_list: comma-separated list of summary statistics input file IDs (initially produced by the
+                      "write_muttargs" function), specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated (previously initialized) "Gene_inst_dict" used as an argument to below function "write_muttargs"
+    """
+
+    input_file_list = input_file_list.split(',')
+    for input_file_id in input_file_list:
         Gene_inst_dict = load_muttargs_from_file(Gene_inst_dict,
-                                                 input_ID,
+                                                 input_file_id,
                                                  variant_annots,
                                                  suppress_indels_bool)
     return Gene_inst_dict
 
 
-# Writes mutational targets that can later be read by 
-#	load_muttargs_from_filelist function in the case of 
-#	metadata run.
-def write_muttargs(Gene_inst_dict, outfile_mask, input_directory="<unspecified>"):
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # outfile_mask: identifier of the output file specified by the user
+def write_muttargs(Gene_inst_dict, 
+                   outfile_mask, 
+                   input_directory="<unspecified>", 
+                   args_obj=None):
+    """
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param input_directory: directory containing all tab-delimited input variant files per individual
+    :param args_obj: dictionary of parsed command-line arguments
+    :return: None, write mutational targets by variant type to outfile
+    """
+
     outfile_name = f"{outfile_mask}_{cfg.muttargs_list_DN_ID}.txt"
     with open(outfile_name, 'w') as outh:
         outh.write('# Mutational targets computed from input variant files located in: '+input_directory+'\n')
+        init_objs_lib.write_run_info(outh, args_obj)
         outh.write(f"variant_type\tensembl_gene_id\tper_patient_mutational_targets\n")
         for va, va_Gene_obj_dict in Gene_inst_dict.items():
             for ENS_ID, Gene_obj in va_Gene_obj_dict.items():
-                muttarg_list = Gene_obj.calculate_muttargs_DN()
-                muttarg_str = ','.join([str(i) for i in muttarg_list])
+                muttarg_list = Gene_obj.calculate_muttargs_denovo()
                 if len(muttarg_list) == 0:
                     continue
+
+                if args_obj and args_obj.write_muttarg_sums:
+                    muttarg_str = np.sum(muttarg_list)
+                else:
+                    muttarg_str = ','.join([str(i) for i in muttarg_list])
                 outh.write(f"{va[0]}{va[1]}\t{ENS_ID}\t{muttarg_str}\n")
 
     print(f"Variant mutational targets written to: {outfile_name}")
 
 
-############################
-##### Statistics block #####
+# ==========================================================================================
+# Statistics functions used by RaMeDiES-DN (de novo recurrence)
+# ==========================================================================================
 
-# Calculate the y statistics for each ENSEMBL ID
-# Called by count_y function
+def count_genes(Gene_inst_dict, return_dict=False):
+    """
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param return_dict: boolean whether to return the complete dictionary (True) or the number of genes (False)
+    :return: the number of genes under consideration (or a dictionary of gene_id -> True of the genes under consideration
+             consideration for the variant types in question). Used as the Bonferroni correction factor for
+             cohort-level recurrence functions RaMeDiES-DN and RaMeDiES-CH.
+    """
+
+    ensg_gene_id_dict = {}
+    for va in init_objs_lib.variant_type_iter():
+        for ensg_gene_id in Gene_inst_dict[va].keys():
+            ensg_gene_id_dict[ensg_gene_id] = True
+    if return_dict:
+        return ensg_gene_id_dict
+
+    return len(ensg_gene_id_dict.keys())
+
+
 def y_from_mu(gene_mus):
-    # gene_mus: ENSEMBL_ID -> array of mutational tergets
-    gene_ys = {}
-    for ENS_ID, muttarg_arr in gene_mus.items():
+    """
+    Called by count_y function
+
+    :param gene_mus: dictionary of Ensembl gene ID -> array of mutational targets (across a cohort)
+    :return: sum of observed mutational targets per gene across a cohort
+    """
+
+    gene_ys = {}  # Ensembl gene ID -> sum of observed mutational targets across all individuals
+    for ensg_gene_id, muttarg_arr in gene_mus.items():
         if muttarg_arr == []:
             continue
-        if not gene_ys.get(ENS_ID):
-            gene_ys[ENS_ID] = 0
+        if not gene_ys.get(ensg_gene_id):
+            gene_ys[ensg_gene_id] = 0
 
-        gene_ys[ENS_ID] += np.sum(muttarg_arr)
-    # gene_ys: ENSEMBL ID -> y statistic
+        gene_ys[ensg_gene_id] += np.sum(muttarg_arr)
+
     return gene_ys
 
 
-# Calculate the y statistics for each ENSEMBL ID
-def count_y(Gene_inst_dict, outfile_mask):
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # outfile_mask: identifier of the output file specified by the user
+def count_y(Gene_inst_dict):
+    """
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :return: sum of observed mutational targets per gene across a cohort
+    """
+
     gene_mus = {}  # gene_mus: ENSEMBL_ID -> array of mutational tergets
     for va, va_Gene_obj_dict in Gene_inst_dict.items():
-        for ENS_ID, Gene_obj in va_Gene_obj_dict.items():
-            if not gene_mus.get(ENS_ID):
-                gene_mus[ENS_ID] = []
-            gene_mus[ENS_ID] += Gene_obj.mu_list
+        for ensg_gene_id, Gene_obj in va_Gene_obj_dict.items():
+            if not gene_mus.get(ensg_gene_id):
+                gene_mus[ensg_gene_id] = []
+            gene_mus[ensg_gene_id] += Gene_obj.mu_list
 
     return y_from_mu(gene_mus)  # gene_ys: ENSEMBL ID -> y statistic
 
 
-# For each ENSEMBL ID, make a list of Variant objects corresponding to variants
-#	from the input VCFs
 def make_gene_mutdict(Gene_inst_dict):
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
+    """
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :return: dictionary of Ensembl gene ID -> list of observed Variant objects (from input tab-delimited variant files)
+    """
 
-    # gene_mutdict: ensembl_gene_id -> list of Variant instances
     gene_mutdict = {}
     for va, va_Gene_obj_dict in Gene_inst_dict.items():
-        for ENS_ID, Gene_obj in va_Gene_obj_dict.items():
+        for ensg_gene_id, Gene_obj in va_Gene_obj_dict.items():
             for Variant_obj in Gene_obj.vars:
-                if not gene_mutdict.get(ENS_ID):
-                    gene_mutdict[ENS_ID] = []
-                gene_mutdict[ENS_ID].append(Variant_obj)
+                if not gene_mutdict.get(ensg_gene_id):
+                    gene_mutdict[ensg_gene_id] = []
+                gene_mutdict[ensg_gene_id].append(Variant_obj)
     return gene_mutdict
 
 
-# Calculate the lambda parameter (expected mutation count)
-def calc_DN_lambda(varcount_dict, Gene_inst_dict, ENS_ID):
-    # varcount_dict: inheritance ID (cfg.inherited_from_dict) ->
-    #	variant annotation (cfg.var_annot_list) -> variant count
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # ensembl_gene_id: ENSEMBL ID of the focal gene
-    lam = 0
+def calc_denovo_lambda(varcount_dict, Gene_inst_dict, ensg_gene_id):
+    """
+    :param varcount_dict: dictionary of inheritance type (e.g., M for maternal) -> variant annotation type
+                          (e.g., CI for coding indels) -> total observed variants of this type
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param ensg_gene_id: Ensembl gene ID
+    :return: the expected variant count for this gene (i.e., lambda parameter)
+    """
+
+    lambda_parameter = 0
     for va in cfg.var_annot_list:
-        if Gene_inst_dict[va].get(ENS_ID):
-            # For each annotation, multiply the variant count by the
-            #	mutational target.
-            lam += varcount_dict["DN"][va] * Gene_inst_dict[va][ENS_ID].gene_mu
-    return lam
+        if Gene_inst_dict[va].get(ensg_gene_id):
+
+            # For each variant annotation type, multiply the variant count by the mutational target.
+            lambda_parameter += varcount_dict["DN"][va] * Gene_inst_dict[va][ensg_gene_id].gene_mu
+    return lambda_parameter
 
 
-# Calculate the false diagnosis rate based the expected number of
-#	variants and the cohort size.
-# Returns the Binomial upper bound specified by cfg.false_diag_rate
-# To obtain an estimate of the fraction of incorrect diagnoses,
-#	divide the false diagnosis rate by the number of variants
-#	occurring in a cohort in a given gene.
-def false_diag_rate(lam, N_cohort):
-    # lam: expected mutation count, see calc_DN_lambda
-    if N_cohort == -1:
+def false_diag_rate(lambda_parameter, num_samples):
+    """
+    Computes the binomial upper bound specified by cfg.false_diag_rate
+    To obtain an estimate of the fraction of incorrect diagnoses (i.e., number of patients with a variant in a
+    recurrently-hit gene, where that variant in that gene in that patient is NOT a true diagnosis), divide the
+    false diagnosis rate (computed here as the binomial upper bound specified by cfg.false_diag_rate) by the number of
+    variants occurring in a given gene across the cohort.
+
+    :param lambda_parameter: the expected variant count for this gene (i.e., lambda parameter)
+    :param num_samples: size of the cohort
+    :return: the false diagnosis rate based on the expected mutational target of all variants and the cohort size
+    """
+
+    if num_samples == -1:
         return np.nan
 
-    # Estimate of the Binomial probability
-    p = lam / N_cohort
-    # True diagnosis rate
+    p = lambda_parameter / num_samples  # estimate of the binomial probability
+
+    # true diagnosis rate (i.e., fraction of individuals where this gene is the correct diagnosis)
     higher_p = 1 - cfg.false_diag_rate
-    # Result is the value of Binomial PPF
-    return binom.ppf(higher_p, N_cohort, p)
+
+    return binom.ppf(higher_p, num_samples, p)
 
 
-# Calculates the CDF of Irwin-Hall distribution
-def IH_CDF(x, n):
-    # x: statistic
-    # n: Irwin-Hall parameter (number of elements in a sum of 0-1 Uniforms)
+def irwinhall_cdf(x, n):
+    """
+    :param x: statistic
+    :param n: Irwin-Hall parameter (number of elements in a sum of 0-1 Uniforms)
+    :return: value of the cumulative density function (CDF) of the Irwin-Hall distribution parameterized by n and
+             computed at x
+    """
 
     # Setting CDF = 1 to the right of the realm of definition
     if x >= n:
@@ -658,77 +758,92 @@ def IH_CDF(x, n):
     return stat
 
 
-# Probability of observing a variant in a cohort
-def DN_P(lam):
-    # lam: expected mutation count, see calc_DN_lambda
-    return 1.0 - np.exp(-lam)
+def denovo_prob(lambda_parameter):
+    """
+    :param lambda_parameter: expected variant count, see "calc_denovo_lambda"
+    :return: probability of observing a variant at all given the expected variant count in a cohort
+    """
+
+    return 1.0 - np.exp(-lambda_parameter)
 
 
-# For a single gene, compute the Irwin-Hall - Poisson recurrence statistic
-def process_single_gene(y, lam, s_het_w, N_cohort):
-    # y: test statistic, sum of mutational targets of independent variants
-    #	within single gene
-    # lam: expected mutation count, see calc_DN_lambda
-    # s_het_w: s_het based weight with unit mean used in the weighted FDR procedure
-    #	See Genovese et al., 2006 for details (https://www.jstor.org/stable/20441304)
-    # num_samples: cohort size
+def process_single_gene(y, lambda_parameter, gene_constraint_weight, num_samples):
+    """
+    For more information on the weighted FDR procedure, see Genovese et al., 2006 for details
+    (https://www.jstor.org/stable/20441304)
 
-    P_dnv = DN_P(lam)
+    :param y: sum of mutational targets of independent variants within a single gene
+    :param lambda_parameter: (float) expected variant count in this gene
+    :param gene_constraint_weight: gene constraint based weight with mean of 1 used in the weighted FDR procedure
+    :param num_samples: number of samples in the cohort
+    :return: the Irwin-Hall/Poisson recurrence statistic computed for a single gene
+    """
+
+    P_dnv = denovo_prob(lambda_parameter)
     P_val = 0
+
     # The "infinite" sum is computed with the first ~1000 values
     for i in range(1, cfg.maxIHval):
+
         # Irwin-Hall survival function
-        P_IH = 1 - IH_CDF(y, i)
+        P_IH = 1 - irwinhall_cdf(y, i)
+
         # Very small values may be negative due to computational errors
         if P_IH < 0:
             P_IH = 0
 
-        P_Pois = poisson.pmf(i, lam)
+        P_Pois = poisson.pmf(i, lambda_parameter)
+
         # Element of the sum
         add_P = P_IH * P_Pois
-        # Early stop in case of the added value being small
-        #	with respect to the already calculated value
+
+        # Early stop in case of the added value being small with respect to the already calculated value
         if P_val != 0 and add_P / P_val < cfg.pval_precision:
             break
 
         P_val += add_P
 
-    # Probability of an observed mutational pattern given that a single
-    #	mutation has been observed. Used in Q-Q plots
+    # Probability of an observed mutational pattern given that a single mutation has been observed. Used in Q-Q plots
     P_cond = P_val / P_dnv
 
     # Q value of the weighted FDR procedure
-    Q_val = P_val / s_het_w
+    if gene_constraint_weight != 0:
+        Q_val = P_val / gene_constraint_weight
+    else:
+        Q_val = 1.0
 
     # Computing the false diagnosis rate
-    f_diag_rate = false_diag_rate(lam, N_cohort)
+    f_diag_rate = false_diag_rate(lambda_parameter, num_samples)
 
-    return [Q_val, P_val, P_cond, P_dnv, lam, f_diag_rate, s_het_w]
+    return [Q_val, P_val, P_cond, P_dnv, lambda_parameter, f_diag_rate, gene_constraint_weight]
 
 
-# Write an output line containing the calculated values
 def generate_output_line(pvalues_array,
                          out_handle,
-                         Gene_inst_dict,
                          ensembl_gene_id,
                          ensembl_to_genename,
                          gene_mutdict,
                          first_line=False):
-    # pvalues_array: process_single_gene output
-    # out_handle: output file object
-    # gene_instances:  variant annotation -> ensembl_gene_id -> Gene object
-    # ensembl_gene_id: gene ENSEMBL ID
-    # ENS2GeneID_dict: a dictionary ensembl_id_dict: ensembl_gene_id -> Gene ID
-    #	look in init_objs_lib/make_ENS2GeneID_dict for details
-    # gene_mutdict: make_gene_mutdict output. A list of Variant objects
-    #	corresponding to variants from the input VCFs
-    # first_line: bool for writing the header
+    """
+    :param pvalues_array: output of "process_single_gene", array of [Q_val, P_val, P_cond, P_dnv, lambda_parameter,
+                          false_diagnosis_rate, gene_constraint_weight]
+    :param out_handle: output file object (opened for write)
+    :param ensembl_gene_id: Ensembl gene ID
+    :param ensembl_to_genename: dictionary of ensembl gene ID -> HGNC gene name
+                                (see init_objs_lib/make_ENS2GeneID_dict for details) for details)
+    :param gene_mutdict: output of "make_gene_mutdict", array of Variant objects corresponding to variants present in
+                         tab-delimited input variant files
+    :param first_line: boolean indicating whether to write a header (True)
+    :return: None, but write properly formatted lines to open file handle as specified
+    """
+
     if first_line:
         out_handle.write('# Genes harboring de novo mutations across cohort ranked by Q-value\n')
         out_handle.write('# file_names should include relevant patient identifiers\n')
         out_handle.write('# Variant inheritance is M=maternally-inherited, P=paternally-inherited, and DN=denovo\n')
-        out_handle.write('# variant_info is &-delimited values: chromsome:refallele_position_altallele|variant_type|variant_functionality_score|variant_inheritance|file_name\n')
-        # Writing a header
+        out_handle.write('# variant_info is &-delimited values: chromsome:refallele_position_altallele|variant_type|' +
+                         'variant_functionality_score|variant_inheritance|file_name\n')
+
         print_arr = ["file_names",
                      "ensembl_gene_id",
                      "gene_name",
@@ -738,33 +853,36 @@ def generate_output_line(pvalues_array,
                      "P_dnv",
                      "poisson_lambda",
                      "false_diag_rate",
-                     "s_het_weight",
+                     "gene_weight",
                      "variant_info"]
 
         out_handle.write('\t'.join(print_arr) + '\n')
         return None
 
+    # DEFAULT run: variant and individual information is included in output
     if gene_mutdict:
-        # In the case of a default run, variant and individual information is
-        #	included in the output
 
         # List of individuals carrying detected mutations in the gene
         ind_list = [Variant_obj.proband_id for Variant_obj in gene_mutdict[ensembl_gene_id]]
         ind_list = ','.join(ind_list)
+
         # List of variant information
         var_info_list = [Variant_obj.print_info() for Variant_obj in gene_mutdict[ensembl_gene_id]]
         var_info_list = ','.join(var_info_list)
+
+    # METADATA run: variant- and individual-level data is NOT printed
     else:
-        # In case of metadata run, variant and individual information is not printed
-        ind_list = "."
+        ind_list = '.'
         var_info_list = '.'
 
-    Gene_ID = ensembl_to_genename[ensembl_gene_id]
+    gene_name = ensembl_to_genename.get(ensembl_gene_id)
 
-    # Printning output as a tab-separated list join
+    if not gene_name:
+        gene_name = '.'
+
     print_arr = [ind_list,
                  ensembl_gene_id,
-                 Gene_ID,
+                 gene_name,
                  str(pvalues_array[0]),
                  str(pvalues_array[1]),
                  str(pvalues_array[2]),
@@ -777,38 +895,43 @@ def generate_output_line(pvalues_array,
     out_handle.write('\t'.join(print_arr) + '\n')
 
 
-# Benjamini-Hochberg algorithm on Q-values of weighted FDR
-# See Genovese et al., 2006 for details (https://www.jstor.org/stable/20441304)
-def wFDR(Q_arr, FDR_arr, N_genes):
-    # Q_arr: array of Q-values
-    # FDR_arr: array of FDR values
-    # num_genes: Number of processed genes
-    Q_arr = sorted(Q_arr)
-    l_Q_arr = len(Q_arr)
-    # FDR_thr_dict: FDR -> Q threshold
-    FDR_thr_dict = {FDR: 0 for FDR in FDR_arr}
-    # For each FDR, computing the threshold Q-value
-    for i in range(l_Q_arr):
-        for FDR in FDR_arr:
-            thr = FDR * (i + 1) / N_genes
-            if Q_arr[i] < thr:
-                FDR_thr_dict[FDR] = thr
-    return FDR_thr_dict
+def weighted_fdr_correction(qval_array, fdrs_to_report, num_genes):
+    """
+    Perform Benjamini-Hochberg algorithm on Q-values for weighted FDR procedure
+    For details, see Genovese et al., 2006 (https://www.jstor.org/stable/20441304)
+
+    :param qval_array: array of unique Q-values
+    :param fdrs_to_report: FDR limits at which to report output, specified by user, default 5% and 10%
+    :param num_genes: number of genes processed
+    :return: the Q-value threshold corresponding to each FDR threshold specified in "fdrs_to_report"
+    """
+
+    qval_array = sorted(qval_array)
+    qval_array_length = len(qval_array)
+
+    fdr_cutoff_to_qval_threshold = {fdr: 0 for fdr in fdrs_to_report}
+
+    # For each FDR cutoff to report, compute the corresponding Q-value threshold
+    for i in range(qval_array_length):
+        for fdr in fdrs_to_report:
+            qval_threshold = fdr * (i + 1) / num_genes
+            if qval_array[i] < qval_threshold:
+                fdr_cutoff_to_qval_threshold[fdr] = qval_threshold
+
+    return fdr_cutoff_to_qval_threshold
 
 
-# Write an intermediate output file, perform weighted FDR
-#	on the computed P-values
-def FDR_procedure(outfile_mask, FDR_arr, N_genes):
-    # outfile_mask: identifier of output files specified by the user
-    # FDR_arr: array of FDR thresholds (specified by user)
-    # num_genes: Number of processed genes
+def FDR_procedure(outfile_mask, fdrs_to_report, num_genes):
+    """
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param fdrs_to_report: FDR limits at which to report output, specified by user, default 5% and 10%
+    :param num_genes: number of genes processed
+    :return: None, but write out intermediate file used to perform the weighted FDR procedure on P-values
+    """
 
-    # outfile_dict: Q_value -> output string. Used to produce
-    #	sorted output
-    outfile_dict = {}
+    outfile_dict = {}  # qvalue -> output string; used to produce output sorted by qvalue
 
-    # Q_val_arr: list of Q-values
-    Q_val_arr = []
+    qval_array = []
 
     filename = f"{outfile_mask}_{cfg.DN_result}_tmp.txt"
 
@@ -823,141 +946,145 @@ def FDR_procedure(outfile_mask, FDR_arr, N_genes):
                 continue
 
             output_str = output_str.strip().split('\t')
-            Q_val = eval(output_str[header["Q_val"]])
-            Q_val_arr.append(Q_val)
-            if not outfile_dict.get(Q_val):
-                outfile_dict[Q_val] = []
-            outfile_dict[Q_val].append(output_str)
+            qval = eval(output_str[header["Q_val"]])
+            qval_array.append(qval)
+            if not outfile_dict.get(qval):
+                outfile_dict[qval] = []
+            outfile_dict[qval].append(output_str)
 
-    FDR_thr_dict = wFDR(Q_val_arr, FDR_arr, N_genes)
-    FDR_header = '\t'.join([f"FDR_{p}" for p in FDR_arr])
+    fdr_to_qval_threshold = weighted_fdr_correction(qval_array, fdrs_to_report, num_genes)
+    fdr_column_names = '\t'.join([f"FDR_{p}" for p in fdr_to_qval_threshold])
 
     # Final output file
     filename = f"{outfile_mask}_{cfg.DN_result}.txt"
     with open(filename, 'w') as outh:
+
+        # write out original header plus additional FDR-relevant columns
         hs = '\t'.join(header_line)
-        # Header with the FDR values is concatenated with the
-        #	existing header
-        outh.write(f"{hs}\t{FDR_header}\n")
-        for Q_val in sorted(outfile_dict.keys()):
-            FDR_res_arr = []
-            # Using Q-value thresholds from wFDR
-            for FDR in FDR_arr:
+        outh.write(f"{hs}\t{fdr_column_names}\n")
+
+        for qval in sorted(outfile_dict.keys()):
+            fdr_results_array = []
+
+            # Using Q-value thresholds from weighted_fdr_correction
+            for FDR in fdr_to_qval_threshold:
+
                 # FDR pass/ not pass is added to the output
-                if Q_val < FDR_thr_dict[FDR]:
-                    FDR_res_arr.append("True")
+                if qval < fdr_to_qval_threshold[FDR]:
+                    fdr_results_array.append("True")
                 else:
-                    FDR_res_arr.append("False")
-            FDR_res = '\t'.join(FDR_res_arr)
-            for file_str_arr in outfile_dict[Q_val]:
+                    fdr_results_array.append("False")
+
+            concatenated_fdr_results = '\t'.join(fdr_results_array)
+            for file_str_arr in outfile_dict[qval]:
                 fsa = '\t'.join(file_str_arr)
-                outh.write(f"{fsa}\t{FDR_res}\n")
+                outh.write(f"{fsa}\t{concatenated_fdr_results}\n")
 
     print(f"Results written to {filename}")
 
 
-# Master function of ramediesDN
-# Based on the variant information or supplied metadata, calculates
-#	the ramediesDN P-value, performs a weighted FDR with weights 
-#	corresponding to 10 s_het bins and prints the output
-def calc_DN_stat(ENS_ID_y_dict,
-                 varcount_dict,
-                 Gene_inst_dict,
-                 outfile_mask,
-                 N_cohort,
-                 gene_mutdict,
-                 FDR_str,
-                 N_genes):
-    # ENS_ID_y_dict: Gene ENSEMBL ID -> y statistic, count_y output,
-    #	computed in ramediesDN.py code
-    # varcount_dict: # varcount_dict: inheritance ID (cfg.inherited_from_dict) ->
-    #	variant annotation (cfg.var_annot_list) -> variant count
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # outfile_mask: identifier of output files specified by the user
-    # num_samples: cohort size
-    # gene_mutdict: make_gene_mutdict output. A list of Variant objects
-    #	corresponding to variants from the input VCFs
-    # FDR_str: comma-separated list of FDR thresholds (specified by user)
-    # num_genes: Number of processed genes
+def calc_denovo_stat(ensg_to_y_stat,
+                     varcount_dict,
+                     Gene_inst_dict,
+                     outfile_mask,
+                     num_samples,
+                     gene_mutdict,
+                     fdrs_to_report_str,
+                     gene_constraint_score_name,
+                     num_genes):
+    """
+    Master function for RaMeDiES-DN; based on input variant information OR supplied metadata, calculates
+    a de novo recurrence p-value per gene, performs a weighted FDR procedure using gene constraint weights,
+    and writes results to file.
+
+    :param ensg_to_y_stat: dictionary of Ensembl gene ID -> (y statistic, count_y output)
+    :param varcount_dict: inheritance type (e.g., M = maternal) -> variant annotation type (e.g., CI for coding indels)
+                          -> # variants of this type
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param num_samples: number of samples in cohort (with corresponding input variant files)
+    :param gene_mutdict: output of "make_gene_mutdict"; Ensembl gene ID -> list of Variant objects extracted from
+                         input tab-delimited variant files
+    :param fdrs_to_report_str: comma-separated list of FDR thresholds (specified by user)
+    :param gene_constraint_score_name: name of the gene-based constraint score to use (e.g., GeneBayes)
+    :param num_genes: number of processed genes
+    :return: None, but perform all operations and create output files as required by RaMeDiES-DN
+    """
 
     # FDR values are obtained from the input string
-    FDR_arr = [eval(i) for i in FDR_str.split(',')]
+    fdrs_to_report = [eval(i) for i in fdrs_to_report_str.split(',')]
 
-    # s_het_bins: Gene ENSEMBL ID -> s_het enrichment bin
-    # Enrichment values are the proportions of exclusively dominant OMIM genes
-    #	in s_het deciles
-    s_het_bins = init_objs_lib.load_s_het_bins()
+    # constraint_bins: Gene ENSEMBL ID -> gene constraint enrichment bin
+    # Enrichment values are the proportions of exclusively dominant OMIM genes in gene constraint score deciles
+    constraint_bins = init_objs_lib.load_gene_score_bins(gene_constraint_score_name)
 
-    # ENS2GeneID_dict: ensembl_gene_id -> Gene ID
-    ENS2GeneID_dict = init_objs_lib.make_ENS2GeneID_dict()
+    # ensg_to_genename: ensembl_gene_id -> Gene ID
+    ensg_to_genename = init_objs_lib.make_ENS2GeneID_dict()
 
     # Intermediate output file
     filename = f"{outfile_mask}_{cfg.DN_result}_tmp.txt"
 
-    with open(filename, 'w') as outh:
+    with open(filename, 'w') as out_handle:
         # Header is printed
         generate_output_line(pvalues_array=None,
-                             out_handle=outh,
-                             Gene_inst_dict=Gene_inst_dict,
+                             out_handle=out_handle,
                              ensembl_gene_id=None,
-                             ensembl_to_genename=ENS2GeneID_dict,
+                             ensembl_to_genename=ensg_to_genename,
                              gene_mutdict=gene_mutdict,
                              first_line=True)
+
         # Iterating over genes
-        for ENS_ID, y in ENS_ID_y_dict.items():
+        for ensembl_gene_id, y in ensg_to_y_stat.items():
+
             # Expected number of variant calculated
-            lam = calc_DN_lambda(varcount_dict, Gene_inst_dict, ENS_ID)
+            lambda_parameter = calc_denovo_lambda(varcount_dict, Gene_inst_dict, ensembl_gene_id)
+
             # s_het weight is obtained
-            s_het_w = s_het_bins.get(ENS_ID)
+            gene_constraint_weight = constraint_bins.get(ensembl_gene_id)
+
             # For gene with no s_het values, s_het weight is set to unity
-            if not s_het_w:
-                s_het_w = 1.0
+            if not gene_constraint_weight:
+                gene_constraint_weight = 1.0
 
             # Calculating the probabilities and Q values
             # See process_single_gene for details
-            P_arr = process_single_gene(y, lam, s_het_w, N_cohort)
+            P_arr = process_single_gene(y, lambda_parameter, gene_constraint_weight, num_samples)
 
             # Intermediate output is printed
-            generate_output_line(P_arr,
-                                 outh,
-                                 Gene_inst_dict,
-                                 ENS_ID,
-                                 ENS2GeneID_dict,
-                                 gene_mutdict,
+            generate_output_line(pvalues_array=P_arr,
+                                 out_handle=out_handle,
+                                 ensembl_gene_id=ensembl_gene_id,
+                                 ensembl_to_genename=ensg_to_genename,
+                                 gene_mutdict=gene_mutdict,
                                  first_line=False)
+
     # Weighted FDR step
-    FDR_procedure(outfile_mask, FDR_arr, N_genes)
+    FDR_procedure(outfile_mask, fdrs_to_report, num_genes)
+
     # Remove the intermediate output
     remove(filename)
 
 
-###############################
-##### CH statistics block #####
+# ==========================================================================================
+# Write and load summary statistics files containing comphet VARIANT COUNT information
+# ==========================================================================================
 
-# The following functions are used only in ramediesCH and ramediesCH_IND
-#	algorithms
-
-
-##### Mutation number product block
-# Set of functions dealing with the products of mutation counts between
-#	annotations. These products are used to compute the expected counts 
-#	of CH variants denoted as lambda (a.k.a the Poisson parameter lambda)
-#	or "lam" as here, as lambda is a Python default function
-
-# Write the mutation number products to intermediate output files
 def write_mutnum_prods(mutnum_prod_dict,
                        mutnum_prod_dist_dict,
                        outfile_mask,
-                       consequence_list,
+                       args_obj,
                        input_directory="<unspecified>"):
-    # mutnum_prod_dict: pair of variant annotations (specified in
-    #	cfg.var_annot_list) -> sum of the products of their counts
-    #	across individuals. See mutnum_prod for details.
-    # mutnum_prod_dist_dict: pair of variant annotations ->
-    #	product value -> frequency. Used for shallow QC purposes
-    # outfile_mask: identifier of output files specified by the user
-    # consequence_list: variant consequence codes specified by the user.
-    #	'C' for coding, 'I' for intronic
+    """
+    Called by "mutnum_prod" function below. Write mutation number products and distribution to file
+
+    :param mutnum_prod_dict: pair of variant annotations (specified in cfg.var_annot_list) ->
+                             sum of the products of their counts. See "mutnum_prod" function below for details.
+    :param mutnum_prod_dist_dict: pair of variant annotations -> product value -> frequency. Used for QC purposes.
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param args_obj: dictionary of parsed command-line arguments
+    :param input_directory: directory containing all tab-delimited input variant files per individual
+    :return: None, but write the mutation number products to file
+    """
 
     filename = f"{outfile_mask}_{cfg.mutnum_prod_CH}.txt"
 
@@ -965,6 +1092,7 @@ def write_mutnum_prods(mutnum_prod_dict,
     with open(filename, 'w') as outh:
         outh.write("# Sum (across cohort) of all products of (# paternally-inherited variants)x(# maternally-inherited variants) for each variant type pair\n")
         outh.write('# Variant input files processed from: '+input_directory+'\n')
+        init_objs_lib.write_run_info(outh, args_obj)
         outh.write("paternal_variant_type\tmaternal_variant_type\ttotal_product_of_variant_counts\n")
         for annot_pair, count in mutnum_prod_dict.items():
             annot_P = f"{annot_pair[0][0]}{annot_pair[0][1]}"
@@ -975,11 +1103,11 @@ def write_mutnum_prods(mutnum_prod_dict,
 
     filename = f"{outfile_mask}_{cfg.mutnum_prod_dist_CH}.txt"
 
-    # Writing the distribution of mutation products to the
-    #	intermediate output
+    # Writing the distribution of mutation products to the intermediate output
     with open(filename, 'w') as outh:
         outh.write('# Number of input variant files with specific (paternal_variant_count)x(maternal_variant_count) values\n')
         outh.write('# Variant input files processed from: '+input_directory+'\n')
+        init_objs_lib.write_run_info(outh, args_obj)
         outh.write("paternal_variant_type\tmaternal_variant_type\tproduct_of_variant_counts\tnumber_samples\n")
         for annot_pair, dist_dict in mutnum_prod_dist_dict.items():
             annot_P = f"{annot_pair[0][0]}{annot_pair[0][1]}"
@@ -991,24 +1119,21 @@ def write_mutnum_prods(mutnum_prod_dict,
     print(f"Distributions of variant count products written to {filename}")
 
 
-# Calculate the sum of products of mutation counts between
-#	annotations. By calling write_mutnum_prods, writes the mutation 
-#	products along with  the distribution of mutation products 
-#	to the intermediate output
-def mutnum_prod(varcount_dict, outfile_mask, consequence_list, input_directory="<unspecified>"):
-    # varcount_dict: proband_id -> inheritance -> variant annotation ->
-    #	variant count
-    # outfile_mask: identifier of output files specified by the user
-    # consequence_list: variant consequence codes specified by the user.
-    #	'C' for coding, 'I' for intronic
+def mutnum_prod(varcount_dict, outfile_mask, args_obj, input_directory="<unspecified>"):
+    """
+    Products of mutation counts are used to compute the expected numbers of compound heterozygous variants,
+    i.e., the Poisson lambda parameter
 
-    # mutnum_prod_dict: pair of variant annotations (specified in
-    #	cfg.var_annot_list) -> sum of the products of their counts
-    mutnum_prod_dict = {}
+    :param varcount_dict: proband_id (filename) -> inheritance type -> variant annotation type -> number of variants
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param args_obj: dictionary of parsed command-line arguments
+    :param input_directory: directory containing all tab-delimited input variant files per individual
+    :return: dictionary pair of variant annotations (specified in cfg.var_annot_list) ->
+             sum of the products of their counts. See "mutnum_prod" function below for details.
+    """
 
-    # mutnum_prod_dist_dict: pair of variant annotations ->
-    #	product value -> frequency. Used for shallow QC purposes
-    mutnum_prod_dist_dict = {}
+    mutnum_prod_dict = {}  # pair of variant annotations -> sum of the products of their counts
+    mutnum_prod_dist_dict = {}  # pair of variant annotations -> products of their counts -> frequency
 
     # Initiating the double variant count dictionaries
     # cfg.var_annot_list: list of variant annotations
@@ -1019,8 +1144,7 @@ def mutnum_prod(varcount_dict, outfile_mask, consequence_list, input_directory="
             mutnum_prod_dict[(va1, va2)] = 0
             mutnum_prod_dist_dict[(va1, va2)] = {}
 
-    # Iterating over individuals, summing the mutation count
-    #	products
+    # Iterating over individuals, summing the mutation count products
     for proband_id, inher_dict in varcount_dict.items():
         if not inher_dict.get('M') or not inher_dict.get('P'):
             continue
@@ -1039,33 +1163,31 @@ def mutnum_prod(varcount_dict, outfile_mask, consequence_list, input_directory="
     write_mutnum_prods(mutnum_prod_dict,
                        mutnum_prod_dist_dict,
                        outfile_mask,
-                       consequence_list,
-					   input_directory)
+                       args_obj,
+                       input_directory)
 
     return mutnum_prod_dict
 
 
-# In the case of ramediesCH metadata run, the mutation number
-#	products are read from the intermediate output files written
-#	by the write_mutnum_prods function
-# This function is called in read_mutnum_prods and processes a single file
 def read_mutnum_prods_from_file(file_id,
                                 mutnum_prod_dict,
                                 variant_annots,
                                 suppress_indels_bool):
-    # file_id: intermediate output identifier specified by user through
-    #	the --M parameter
-    # mutnum_prod_dict: pair of variant annotations (specified in
-    #	cfg.var_annot_list) -> sum of the products of their counts.
-    #	Initiated in read_mutnum_prods and updated here
-    # variant_annots: variant annotation specified by the user as
-    #	--variant_annots parameter of ramediesCH
-    # suppress_indels_flag: specified by the user if the indels are
-    #	not to be processed.
+    """
+    Called by "read_mutnum_prods" and processes a single file in the case of a metadata run on summary statistics
+
+    :param file_id: summary statistics input file ID (initially produced by the "write_mutnum_prods" function),
+                     specified by user using the --M parameter
+    :param mutnum_prod_dict: dictionary of pair of variant annotations -> sum of the products of their counts
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated dictionary of pair of variant annotations -> sum of the products of their counts
+    """
 
     filename = f"{file_id}_{cfg.mutnum_prod_CH}.txt"
     with open(filename, 'r') as inh:
         for mnp_str in inh:
+
             header = None
             if mnp_str.startswith('#'):
                 continue
@@ -1074,36 +1196,35 @@ def read_mutnum_prods_from_file(file_id,
                 continue
 
             mnp_str = mnp_str.strip().split()
-            # Paternal variant annotation
-            va_P = (mnp_str[0][0], mnp_str[0][1])
-            # Maternal variant annotation
-            va_M = (mnp_str[1][0], mnp_str[1][1])
+
+            va_P = (mnp_str[0][0], mnp_str[0][1])  # Paternal variant annotation
+
+            va_M = (mnp_str[1][0], mnp_str[1][1])  # Maternal variant annotation
+
             # Check if the line meets run specifications
-            # Specified annotation
             if va_P[0] not in variant_annots or va_M[0] not in variant_annots:
                 continue
+
             # Specified regime of indel processing
             if suppress_indels_bool and (va_P[1] == 'I' or va_M[1] == 'I'):
                 continue
+
             count = eval(mnp_str[2])
             mutnum_prod_dict[(va_P, va_M)] += count
 
     return mutnum_prod_dict
 
 
-# Process the variant number product files with IDs specified by the user 
-#	under --M parameter of ramediesCH
 def read_mutnum_prods(file_id_list, variant_annots, suppress_indels_bool):
-    # file_id_list: comma-separated list of intermediate output identifiers
-    #	specified by user through the --M parameter
-    # variant_annots: variant annotation specified by the user as
-    #	--variant_annots parameter of ramediesCH
-    # suppress_indels_flag: specified by the user if the indels are
-    #	not to be processed.
+    """
+    :param file_id_list: comma-separated list of summary statistics input file IDs (initially produced by the
+                         "write_mutnum_prods" function), specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: dictionary of pair of variant annotations -> sum of the products of their counts
+    """
 
-    # mutnum_prod_dict: pair of variant annotations (specified in
-    #	cfg.var_annot_list) -> sum of the products of their counts
-    mutnum_prod_dict = {}
+    mutnum_prod_dict = {}  # pair of variant annotations -> sum of the products of their counts
 
     # Initiating the double variant count dictionaries
     # cfg.var_annot_list: list of variant annotations
@@ -1114,7 +1235,8 @@ def read_mutnum_prods(file_id_list, variant_annots, suppress_indels_bool):
             mutnum_prod_dict[(va1, va2)] = 0
 
     for file_id in file_id_list.split(','):
-        # For each pecified ID, call read_mutnum_prods_from_file
+
+        # For each specified ID, call read_mutnum_prods_from_file
         mutnum_prod_dict = read_mutnum_prods_from_file(file_id,
                                                        mutnum_prod_dict,
                                                        variant_annots,
@@ -1123,56 +1245,57 @@ def read_mutnum_prods(file_id_list, variant_annots, suppress_indels_bool):
     return mutnum_prod_dict
 
 
-##### CH mutational target block
+# ==========================================================================================
+# Write and load summary statistics files containing comphet MUTATIONAL TARGET information
+# ==========================================================================================
 
-# Set of functions dealing with the products of mutational targets of individual 
-#	variants between annotations. These are used to compute the y statistic 
-#	of CH variants.
+def write_comphet_muttargs(gene_comphet_mutdict, outfile_mask, input_directory="<unspecified>"):
+    """
+    :param gene_comphet_mutdict: Ensembl gene ID -> list of CH_Variant objects extracted from input tab-delimited 
+                                 variant files
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param input_directory: directory containing all tab-delimited input variant files per individual
+    :return: None, but write out mutational target information to file
+    """
 
-# Write the CH variant mutational targets defined as the maximum of
-#	individual (paternally or maternally inherited) variant mutational targets
-# The intermediate output produced by this function is read by read_CH_muttargs and
-#	read_CH_muttargs_from_file in the case of metadata run
-def write_CH_muttargs(CH_dict, outfile_mask, indirectory="<unspecified>"):
-    # CH_dict: an object analogous to gene_mutdict object used in ramediesDN.
-    #	ENSEMBL_ID -> list of CH_variant objects.
-    # outfile_mask: identifier of output files specified by the user
     filename = f"{outfile_mask}_{cfg.muttargs_CH_ID}.txt"
     with open(filename, 'w') as outh:
         outh.write(
-            '# Compound heterozygous mutational targets computed for processed variant files in ' + indirectory + '\n')
+            '# Compound heterozygous mutational targets computed for processed variant files in ' + input_directory + '\n')
         outh.write('# variant types are in the format paternal_variant_type,maternal_variant_type\n')
         outh.write(f"variant_type\tensembl_gene_id\tper_patient_mutational_targets\n")
-        for ENS_ID, VariantCollection_obj in CH_dict.items():
+        for ensembl_gene_id, VariantCollection_obj in gene_comphet_mutdict.items():
             for CH_variant_obj in VariantCollection_obj.CH_list:
+
                 # va_P: variant annotation of the paternally inherited variant
                 # va_M: variant annotation of the maternally inherited variant
                 va_P = CH_variant_obj.var_P.var_annot
                 va_M = CH_variant_obj.var_M.var_annot
+
                 # CH annotation
                 va = f"{va_P[0]}{va_P[1]},{va_M[0]}{va_M[1]}"
+
                 # CH mutational target
-                muttarg = CH_variant_obj.mu2
-                outh.write(f"{va}\t{ENS_ID}\t{muttarg}\n")
+                muttarg = round(CH_variant_obj.mu2, 3)
+                outh.write(f"{va}\t{ensembl_gene_id}\t{muttarg}\n")
 
     print(f"Compound heterozygous variant mutational targets written to: {filename}")
 
 
-# In the case of metadata run, read the CH mutational targets
-#	from a file produced by write_CH_muttargs
-# Called in read_CH_muttargs
-def read_CH_muttargs_from_file(file_id,
-                               CH_y_dict,
-                               variant_annots,
-                               suppress_indels_bool):
-    # file_id: intermediate output identifier specified by user through
-    #	the --M parameter
-    # CH_y_dict: akin to the ENS_ID_y_dict of ramediesDN. Gene ENSEMBL ID ->
-    #	y statistic. Initialized in read_CH_muttargs, updated here
-    # variant_annots: variant annotation specified by the user as
-    #	--variant_annots parameter of ramediesCH
-    # suppress_indels_flag: specified by the user if the indels are
-    #	not to be processed.
+def read_comphet_muttargs_from_file(file_id,
+                                    CH_y_dict,
+                                    variant_annots,
+                                    suppress_indels_bool):
+    """
+    Called by "read_comphet_muttargs"
+
+    :param file_id: summary statistics input file ID (initially produced by the "write_mutnum_prods" function),
+                    specified by user using the --M parameter
+    :param CH_y_dict: ensembl gene ID -> comphet y statistic (initialized in read_comphet_muttargs, updated here)
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: updated ensembl gene ID -> comphet y statistic
+    """
 
     filename = f"{file_id}_{cfg.muttargs_CH_ID}.txt"
     print("Reading compound heterozygous mutational targets from file:", filename)
@@ -1205,87 +1328,92 @@ def read_CH_muttargs_from_file(file_id,
     return CH_y_dict
 
 
-# In the case of metadata run, read the CH mutational targets
-#	from a list of files produced by write_CH_muttargs in default or
-#	metadata write mode runs
-def read_CH_muttargs(file_id_list, variant_annots, suppress_indels_bool):
-    # file_id_list: comma-separated list of intermediate output identifiers
-    #	specified by user through the --M parameter
-    # variant_annots: variant annotation specified by the user as
-    #	--variant_annots parameter of ramediesCH
-    # suppress_indels_flag: specified by the user if the indels are
-    #	not to be processed.
+def read_comphet_muttargs(file_id_list, variant_annots, suppress_indels_bool):
+    """
+    In the case of a metadata run, read the comphet mutational target information from the list of files
+    originally produced by "write_comphet_muttargs"
 
-    # CH_y_dict: akin to the ENS_ID_y_dict of ramediesDN. Gene ENSEMBL ID ->
-    #	y statistic
+    :param file_id_list: comma-separated list of summary statistics input file IDs (initially produced by the
+                         "write_mutnum_prods" function), specified by user using the --M parameter
+    :param variant_annots: variant annotation types included, specified by user using the --variant_annots parameter
+    :param suppress_indels_bool: boolean indicating whether to include indels (False), specified by user
+    :return: ensembl gene ID -> comphet y statistic
+    """
+
     CH_y_dict = {}
 
     for file_id in file_id_list.split(','):
-        CH_y_dict = read_CH_muttargs_from_file(file_id,
-                                               CH_y_dict,
-                                               variant_annots,
-                                               suppress_indels_bool)
+        CH_y_dict = read_comphet_muttargs_from_file(file_id,
+                                                    CH_y_dict,
+                                                    variant_annots,
+                                                    suppress_indels_bool)
 
     return CH_y_dict
 
 
-##### CH statistics block
-# A set of functions used in the ramediesCH core algorithm
+# ==================================================================================
+# Statistics functions used by RaMeDiES-CH (compound heterozygous recurrence)
+# ==================================================================================
 
-# Calculate the expected number of CH variants given the gene and 
-#	the cohort size.
-def calc_CH_lambda(mutnum_prod_dict, Gene_inst_dict, ENS_ID):
-    # mutnum_prod_dict: mutnum_prod or read_mutnum_prods output
-    #	CH variant annotation -> count
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # ensembl_gene_id: Gene ENSEMBL ID
-    CH_lambda = 0
+def calc_comphet_lambda(mutnum_prod_dict, Gene_inst_dict, ensembl_gene_id):
+    """
+    :param mutnum_prod_dict: dictionary of pair of variant annotations -> sum of the products of their counts
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param ensembl_gene_id: Ensembl gene ID
+    :return: expected number of comphet variants in a gene given the cohort size; Poisson lambda parameter
+    """
+
+    comphet_lambda = 0
+
     for (va_P, va_M), count in mutnum_prod_dict.items():
-        if not Gene_inst_dict[va_P].get(ENS_ID) or not Gene_inst_dict[va_M].get(ENS_ID):
+        if not Gene_inst_dict[va_P].get(ensembl_gene_id) or not Gene_inst_dict[va_M].get(ensembl_gene_id):
             continue
-        mu_P = Gene_inst_dict[va_P][ENS_ID].gene_mu
-        mu_M = Gene_inst_dict[va_M][ENS_ID].gene_mu
+        mu_P = Gene_inst_dict[va_P][ensembl_gene_id].gene_mu
+        mu_M = Gene_inst_dict[va_M][ensembl_gene_id].gene_mu
+
         # The expected number is updated based on the gene mutational targets
         #	and the products of mutation counts
-        CH_lambda += count * mu_P * mu_M
+        comphet_lambda += count * mu_P * mu_M
 
-    return CH_lambda
+    return comphet_lambda
 
 
-# CH_y_dict: obtained in read_CH_muttargs_from_file in the case of metadata run,
-#	Calculated here in the regular run
-def calc_CH_y_dict(CH_dict):
-    # CH_dict: ensembl_gene_id -> VariantCollection object
+def calc_CH_y_dict(gene_comphet_mutdict):
+    """
+    :param gene_comphet_mutdict: Ensembl gene ID -> list of CH_Variant objects extracted from input tab-delimited
+                                 variant files
+    :return: updated dictionary of ensembl gene ID -> comphet y statistic
+    """
 
-    # CH_y_dict: Gene ENSEMBL ID -> y statistic
     CH_y_dict = {}
-    for ENS_ID, VariantCollection_obj in CH_dict.items():
+    for ensembl_gene_id, VariantCollection_obj in gene_comphet_mutdict.items():
         if VariantCollection_obj.CH_list == []:
             continue
 
-        # For each gene, y is calculated
-        y = VariantCollection_obj.calc_CH_y()
-        CH_y_dict[ENS_ID] = y
+        y = VariantCollection_obj.calc_comphet_y()
+        CH_y_dict[ensembl_gene_id] = y
 
     return CH_y_dict
 
 
-# Analogous to ramediesDN generate_output_line.
-# Generates an output line for ramediesCH
-def generate_output_line_CH(P_arr,
-                            outh,
-                            CH_dict,
-                            ENS_ID,
-                            ENS2GeneID_dict,
-                            first_line):
-    # pvalues_array: truncated process_single_gene output (without s_het bins and
-    #	weighted FDR Q-values)
-    # out_handle: output file object
-    # CH_dict: ensembl_gene_id -> VariantCollection object
-    # ensembl_gene_id: gene ENSEMBL ID
-    # ENS2GeneID_dict: a dictionary ensembl_id_dict: ensembl_gene_id -> Gene ID
-    #	look in init_objs_lib/make_ENS2GeneID_dict for details
-    # first_line: bool for writing the header
+def generate_output_line_comphet(pvalues_array,
+                                 out_handle,
+                                 gene_comphet_mutdict,
+                                 ensembl_gene_id,
+                                 ensg_to_genename,
+                                 first_line):
+    """
+    :param pvalues_array: output of "process_single_gene", array of [P_val, P_cond, P_comphet, lambda_parameter,
+                          false_diagnosis_rate]
+    :param out_handle: output file object (opened for write)
+    :param gene_comphet_mutdict: output of "make_gene_comphet_mutdict", array of Variant objects corresponding to
+                                 variants present in tab-delimited input variant files
+    :param ensembl_gene_id: Ensembl gene ID
+    :param ensg_to_genename: dictionary of ensembl gene ID -> HGNC gene name
+                                (see init_objs_lib/make_ENS2GeneID_dict for details) for details)
+    :param first_line: boolean indicating whether to write a header (True)
+    :return: None, but write properly formatted lines to open file handle as specified
+    """
 
     if first_line:
         # Prints the first line
@@ -1299,61 +1427,63 @@ def generate_output_line_CH(P_arr,
                      "false_diagnosis_rate",
                      "variant_info"]
 
-        outh.write('\t'.join(print_arr) + '\n')
+        out_handle.write('\t'.join(print_arr) + '\n')
         return None
 
-    if CH_dict:
-        # In case of default run, the individual information is printed to the output
-        #	along with the variant information
+    # DEFAULT run: individual variant-level information is printed to output
+    if gene_comphet_mutdict:
 
         # IDs of individuals are printed
-        ind_list = [CH.var_P.proband_id for CH in CH_dict[ENS_ID].CH_list]
+        ind_list = [CH.var_P.proband_id for CH in gene_comphet_mutdict[ensembl_gene_id].CH_list]
         ind_list = ','.join(ind_list)
+
         # Variant information is printed
-        var_info_list = [CH.print_info() for CH in CH_dict[ENS_ID].CH_list]
+        var_info_list = [CH.print_info() for CH in gene_comphet_mutdict[ensembl_gene_id].CH_list]
         var_info_list = ','.join(var_info_list)
+
+    # METADATA run: all individual-level information is excluded from output file
     else:
-        # In the case of metadata run, variant information and individual IDs
-        #	are not printed to the output
         ind_list = "."
         var_info_list = '.'
 
-    Gene_ID = ENS2GeneID_dict[ENS_ID]
+    gene_name = ensg_to_genename[ensembl_gene_id]
 
     print_arr = [ind_list,
-                 ENS_ID,
-                 Gene_ID,
-                 str(P_arr[0]),
-                 str(P_arr[1]),
-                 str(P_arr[2]),
-                 str(P_arr[3]),
-                 str(P_arr[4]),
+                 ensembl_gene_id,
+                 gene_name,
+                 str(pvalues_array[0]),
+                 str(pvalues_array[1]),
+                 str(pvalues_array[2]),
+                 str(pvalues_array[3]),
+                 str(pvalues_array[4]),
                  var_info_list]
 
     return '\t'.join(print_arr) + '\n'
 
 
-# Master function of ramediesCH
-# Based on the variant information or supplied metadata, calculates
-#	the ramediesCH P-values and prints the output
-def calc_CH_stat(CH_y_dict,
-                 CH_dict,
-                 Gene_inst_dict,
-                 mutnum_prod_dict,
-                 outfile_mask,
-                 N_cohort,
-                 N_genes):
-    # CH_y_dict: Gene ENSEMBL ID -> y statistic
-    # CH_dict: ensembl_gene_id -> VariantCollection object
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # mutnum_prod_dict: mutnum_prod or read_mutnum_prods output
-    #	CH variant annotation -> count
-    # outfile_mask: identifier of output files specified by the user
-    # num_samples: cohort size
-    # num_genes: Number of processed genes
+def calc_comphet_stat(CH_y_dict,
+                      gene_comphet_mutdict,
+                      Gene_inst_dict,
+                      mutnum_prod_dict,
+                      outfile_mask,
+                      num_samples,
+                      num_genes):
+    """
+    Master function for RaMeDiES-CH; based on input variant information OR supplied metadata, calculates
+    a comphet recurrence p-value per gene and writes results to file.
 
-    # ENS2GeneID_dict: ENSEMBL ID -> Gene ID
-    ENS2GeneID_dict = init_objs_lib.make_ENS2GeneID_dict()
+    :param CH_y_dict: ensembl gene ID -> comphet y statistic
+    :param gene_comphet_mutdict: output of "make_gene_comphet_mutdict", array of Variant objects corresponding to
+                                 variants present in tab-delimited input variant files
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param mutnum_prod_dict: dictionary of pair of variant annotations -> sum of the products of their counts
+    :param outfile_mask: outfile file prefix, specified by user using the --o parameter
+    :param num_samples: number of samples in cohort
+    :param num_genes: number of genes under consideration
+    :return: None, but write properly formatted output lines as specified
+    """
+
+    ensg_to_genename = init_objs_lib.make_ENS2GeneID_dict()
 
     # Output file
     filename = f"{outfile_mask}_{cfg.CH_result}.txt"
@@ -1361,96 +1491,104 @@ def calc_CH_stat(CH_y_dict,
     # P-value -> list of output lines. Used to make a sorted output file
     output_dict = {}
 
-    with open(filename, 'w') as outh:
+    with open(filename, 'w') as out_handle:
         # Printing the output header
-        generate_output_line_CH(P_arr=None,
-                                outh=outh,
-                                CH_dict=CH_dict,
-                                ENS_ID=None,
-                                ENS2GeneID_dict=ENS2GeneID_dict,
-                                first_line=True)
+        generate_output_line_comphet(pvalues_array=None,
+                                     out_handle=out_handle,
+                                     gene_comphet_mutdict=gene_comphet_mutdict,
+                                     ensembl_gene_id=None,
+                                     ensg_to_genename=ensg_to_genename,
+                                     first_line=True)
 
-        # For each gene, calculate statistic and put the output line into
-        #	output_dict
-        for ENS_ID, y in CH_y_dict.items():
-            lam = calc_CH_lambda(mutnum_prod_dict, Gene_inst_dict, ENS_ID)
-            P_arr = process_single_gene(y,
-                                        lam,
-                                        s_het_w=1.0,  # Dummy value
-                                        N_cohort=N_cohort)[1:-1]  # Discarding Q and s_het
+        # For each gene, calculate statistic and put the output line into output_dict
+        for ensembl_gene_id, y in CH_y_dict.items():
+            comphet_lambda_parameter = calc_comphet_lambda(mutnum_prod_dict, Gene_inst_dict, ensembl_gene_id)
+            pvalues_array = process_single_gene(y,
+                                        comphet_lambda_parameter,
+                                        gene_constraint_weight=1.0,  # Dummy value
+                                        num_samples=num_samples)[1:-1]  # Discarding Q and gene constraint values
 
-            ol = generate_output_line_CH(P_arr,
-                                         outh,
-                                         CH_dict,
-                                         ENS_ID,
-                                         ENS2GeneID_dict,
-                                         first_line=False)
+            ol = generate_output_line_comphet(pvalues_array,
+                                              out_handle,
+                                              gene_comphet_mutdict,
+                                              ensembl_gene_id,
+                                              ensg_to_genename,
+                                              first_line=False)
 
-            if not output_dict.get(P_arr[0]):
-                output_dict[P_arr[0]] = []
-            output_dict[P_arr[0]].append(ol)
+            if not output_dict.get(pvalues_array[0]):
+                output_dict[pvalues_array[0]] = []
+            output_dict[pvalues_array[0]].append(ol)
 
         # Writing the otput data
         for P in sorted(output_dict.keys()):
             for ol in output_dict[P]:
-                outh.write(ol)
+                out_handle.write(ol)
 
     print(f"Results written to {filename}")
 
 
-##################################
-##### By-individual CH block #####
+# ==================================================================================
+# Statistics functions used by RaMeDiES-IND (individual-level compound heterozygous variants)
+# ==================================================================================
 
-# A set of functions used exclusively in the ramediesCH_IND algorithm
-#	dealing with individual-level CH analysis.
-
-# Function that deletes all the variant information from the existing 
-#	gene_instances.
-# Used to re-use the initially built gene_instances multiple times
 def clean_Gene_inst_dict(Gene_inst_dict):
+    """
+    Clear out variant information from existing gene instance dictionary to reuse the initially-built
+    dictionary multiple times
+
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :return: a new Gene_inst_dict dictionary with all variants and mutational targets removed
+    """
     # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
     for va in Gene_inst_dict.keys():
-        for ENS_ID in Gene_inst_dict[va].keys():
+        for ensembl_gene_id in Gene_inst_dict[va].keys():
             # vars and mu_list attributes are cleaned
-            Gene_inst_dict[va][ENS_ID].vars = []
-            Gene_inst_dict[va][ENS_ID].mu_list = []
+            Gene_inst_dict[va][ensembl_gene_id].vars = []
+            Gene_inst_dict[va][ensembl_gene_id].mu_list = []
     return Gene_inst_dict
 
 
-# Calculate the expected number of per-individual CH variants
-def calc_CH_IND_P(y, CH_lambda):
-    # y: per-individual CH test statistic, which is the fraction
-    #	of CH mutational targets across the genome equal or lower
-    #	to the observed one.
-    P_val = 0
+def calc_comphet_individual_pvalue(y, comphet_lambda_parameter):
+    """
+    :param y: per-individual comphet test statistic, which is the fraction of comphet mutational targets across the
+              genome that is equal to or lower than the observed mutational target
+    :param comphet_lambda_parameter: expected number of comphets in this individual given observed variant counts
+    :return: array of [gene_pvalue, conditional_pvalue (for QQ plots), same starting y statistic, same starting
+                       lambda parameter]
+    """
+
+    gene_pvalue = 0
     stat_val = 1
     K_i = 1
+
     # Infinite sum approximation
-    while stat_val > 1e-16 or K_i < 5 * CH_lambda or K_i < 10:
-        stat_val = (1 - (1 - y) ** K_i) * poisson.pmf(K_i, CH_lambda)
-        P_val += stat_val
+    while stat_val > 1e-16 or K_i < 5 * comphet_lambda_parameter or K_i < 10:
+        stat_val = (1 - (1 - y) ** K_i) * poisson.pmf(K_i, comphet_lambda_parameter)
+        gene_pvalue += stat_val
         K_i += 1
+
     # Probability of y conditional on observation of at least one CH
-    P_cond = P_val / (1 - np.exp(-CH_lambda))
-    return [P_val, P_cond, y, CH_lambda]
+    conditional_pvalue = gene_pvalue / (1 - np.exp(-comphet_lambda_parameter))
+    return [gene_pvalue, conditional_pvalue, y, comphet_lambda_parameter]
 
 
-# Print output lines
-def print_CH_IND_line(outh,
-                      P_arr=None,
-                      top_CH=None,
-                      ENS_ID=None,
-                      ENS2GeneID_dict=None,
-                      first_line=True):
-    # out_handle: output file object
-    # pvalues_array: calc_CH_IND_P output
-    # top_CH: CH_variant object corresponding to the lest observed CH
-    # ensembl_gene_id: gene ENSEMBL ID
-    # ENS2GeneID_dict: a dictionary ensembl_id_dict: ensembl_gene_id -> Gene ID
-    #	look in init_objs_lib/make_ENS2GeneID_dict for details
-    # first_line: bool for writing the header
+def print_comphet_individual_line(out_handle,
+                                  pvalues_array=None,
+                                  top_comphet=None,
+                                  ensembl_gene_id=None,
+                                  ensg_to_genename=None,
+                                  first_line=True):
+    """
+    :param out_handle: output file object (opened for write)
+    :param pvalues_array: output of "calc_comphet_individual_pvalue", array of [P_val, P_cond, P_comphet, lambda_parameter,
+                          false_diagnosis_rate]
+    :param top_comphet: CH_variant object corresponding to the least expected comphet occurrence
+    :param ensembl_gene_id: Ensembl gene ID
+    :param ensg_to_genename: dictionary of ensembl_gene_id -> HGNC gene name
+    :param first_line: boolean indicating whether only the header should be written (True) or only value lines (False)
+    :return: None, but write properly formatted lines to open file handle as specified
+    """
 
-    # Print the output header
     if first_line:
         print_arr = ["file_name",
                      "ensembl_gene_id",
@@ -1461,97 +1599,86 @@ def print_CH_IND_line(outh,
                      "poisson_lambda",
                      "variant_info"]
 
-        outh.write('\t'.join(print_arr) + '\n')
+        out_handle.write('\t'.join(print_arr) + '\n')
         return None
 
     # Print the output for a single individual
-    Gene_ID = ENS2GeneID_dict[ENS_ID]
-    var_info = top_CH.print_info()
-    print_arr = [top_CH.var_P.proband_id,
-                 ENS_ID,
-                 Gene_ID,
-                 str(P_arr[0]),
-                 str(P_arr[1]),
-                 str(P_arr[2]),
-                 str(P_arr[3]),
+    gene_name = ensg_to_genename[ensembl_gene_id]
+    var_info = top_comphet.print_info()
+    print_arr = [top_comphet.var_P.proband_id,
+                 ensembl_gene_id,
+                 gene_name,
+                 str(pvalues_array[0]),
+                 str(pvalues_array[1]),
+                 str(pvalues_array[2]),
+                 str(pvalues_array[3]),
                  var_info]
 
-    outh.write('\t'.join(print_arr) + '\n')
+    out_handle.write('\t'.join(print_arr) + '\n')
 
 
-# Master function of ramediesCH_IND
-# Based on the variant information from a single individual, calculates
-#	the ramediesCH_IND P-values and prints the output
-def calc_CH_IND_stat(outh,
-                     varcounts,
-                     top_CH,
-                     Gene_inst_dict,
-                     ENS2GeneID_dict):
-    # out_handle: output file object
-    # varcounts: inheritance ID (specified in cfg.inherited_from_dict) ->
-    #	variant annotation (specified in cfg.var_annot_list) ->
-    #	Number of per-individual variants
-    # top_CH: CH_variant object corresponding to the lest observed CH
-    # gene_instances: variant annotation -> ensembl_gene_id -> Gene object
-    # ENS2GeneID_dict: a dictionary ensembl_id_dict: ensembl_gene_id -> Gene ID
-    #	look in init_objs_lib/make_ENS2GeneID_dict for details
+def calc_comphet_individual_statistic(out_handle,
+                                      variant_counts,
+                                      top_comphet,
+                                      Gene_inst_dict,
+                                      ensg_to_genename):
+    """
+    Master function for RaMeDiES-IND; based on input variant information OR supplied metadata, calculates
+    a p-value for the most surprising comphet per individual in a cohort and writes to file.
 
-    # The expected number of Ch variants per individual
-    CH_lambda = 0
+    :param out_handle: output file object (opened for write)
+    :param variant_counts: dictionary of inheritance type (e.g., M for maternal) -> variant annotation type
+                           (e.g., CI for coding indel) -> # of variants of this type per individual
+    :param top_comphet: CH_variant object corresponding to the least expected comphet occurrence
+    :param Gene_inst_dict: variant annotation type (e.g., CI) -> Ensembl Gene ID -> Gene (object)
+    :param ensg_to_genename: dictionary of ensembl_gene_id -> HGNC gene name
+    :return: None, but write properly formatted output lines as specified
+    """
 
-    # y: per-individual CH test statistic, which is the fraction
-    #	of CH mutational targets across the genome equal or lower
-    #	to the observed one.
+    comphet_lambda_parameter = 0  # expected number of comphet variants per individual
+
+    # per-individual comphet test statistic, which is the fraction of comphet mutational targets across the genome
+    # that are equal to or lower than the observed comphet mutational target.
     y = 0
 
     # corr_factor: maximal CH mutational target in the sense of y
-    corr_factor = 0
-
-    # Observed mutational target
-    mu2 = top_CH.mu ** 2
+    corr_factor = 0  # maximal comphet mutational target (as ranked with "y")
 
     # Iterate over pairs of variant annotations
-    for va_P, var_num_P in varcounts['P'].items():
-        for va_M, var_num_M in varcounts['M'].items():
+    for va_P, var_num_P in variant_counts['P'].items():
+        for va_M, var_num_M in variant_counts['M'].items():
             if var_num_P * var_num_M == 0:
                 continue
 
             # Iterate over genes
-            for ENS_ID, Gene_obj_P in Gene_inst_dict[va_P].items():
-                Gene_obj_M = Gene_inst_dict[va_M].get(ENS_ID)
+            for ensembl_gene_id, Gene_obj_P in Gene_inst_dict[va_P].items():
+                Gene_obj_M = Gene_inst_dict[va_M].get(ensembl_gene_id)
                 if not Gene_obj_M:
                     continue
 
-                # Counting all mutational targets lesser than mu2
-                mut_targ_P_iter = Gene_obj_P.gene_mu
-                if mut_targ_P_iter < top_CH.mu:
-                    mut_targ_P = mut_targ_P_iter
-                else:
-                    mut_targ_P = top_CH.mu
+                # Counting all mutational targets lesser than top_comphet.mu ** 2
+                mut_targ_P = min(Gene_obj_P.gene_mu, top_comphet.mu)
+                mut_targ_M = min(Gene_obj_M.gene_mu, top_comphet.mu)
 
-                mut_targ_M_iter = Gene_obj_M.gene_mu
-                if mut_targ_M_iter < top_CH.mu:
-                    mut_targ_M = mut_targ_M_iter
-                else:
-                    mut_targ_M = top_CH.mu
-
-                # y, CH_lambda and corr_factor are updated here
+                # y, comphet_lambda_parameter and corr_factor are updated here
+                # NOTE that the observed mutational target is actually top_comphet.mu ** 2, which might be
+                #      greater than the total squared mutational target of the gene, which is why we
                 y += np.max([mut_targ_P, mut_targ_M]) ** 2
-                corr_factor += np.max([mut_targ_P_iter, mut_targ_M_iter]) ** 2
-                CH_lambda += var_num_P * var_num_M * mut_targ_P_iter * mut_targ_M_iter
+                corr_factor += np.max([Gene_obj_P.gene_mu, Gene_obj_M.gene_mu]) ** 2
+                comphet_lambda_parameter += (var_num_P * Gene_obj_P.gene_mu) * (var_num_M * Gene_obj_M.gene_mu)
 
     # y normalization
     y = y / corr_factor
 
-    # probability of y given CH_lambda
-    P_arr = calc_CH_IND_P(y, CH_lambda)
+    # probability of y given comphet_lambda_parameter
+    pvalues_array = calc_comphet_individual_pvalue(y, comphet_lambda_parameter)
 
     # Writing the output
-    print_CH_IND_line(outh,
-                      P_arr,
-                      top_CH,
-                      top_CH.ENS_ID,
-                      ENS2GeneID_dict,
-                      first_line=False)
+    print_comphet_individual_line(out_handle,
+                                  pvalues_array,
+                                  top_comphet,
+                                  top_comphet.ENS_ID,
+                                  ensg_to_genename,
+                                  first_line=False)
 
 # Written on 01.23.2024 by Mikhail Moldovan, HMS DBMI
