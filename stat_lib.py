@@ -1466,8 +1466,7 @@ def calc_comphet_stat(CH_y_dict,
                       Gene_inst_dict,
                       mutnum_prod_dict,
                       outfile_mask,
-                      num_samples,
-                      num_genes):
+                      num_samples):
     """
     Master function for RaMeDiES-CH; based on input variant information OR supplied metadata, calculates
     a comphet recurrence p-value per gene and writes results to file.
@@ -1479,7 +1478,6 @@ def calc_comphet_stat(CH_y_dict,
     :param mutnum_prod_dict: dictionary of pair of variant annotations -> sum of the products of their counts
     :param outfile_mask: outfile file prefix, specified by user using the --o parameter
     :param num_samples: number of samples in cohort
-    :param num_genes: number of genes under consideration
     :return: None, but write properly formatted output lines as specified
     """
 
@@ -1504,9 +1502,9 @@ def calc_comphet_stat(CH_y_dict,
         for ensembl_gene_id, y in CH_y_dict.items():
             comphet_lambda_parameter = calc_comphet_lambda(mutnum_prod_dict, Gene_inst_dict, ensembl_gene_id)
             pvalues_array = process_single_gene(y,
-                                        comphet_lambda_parameter,
-                                        gene_constraint_weight=1.0,  # Dummy value
-                                        num_samples=num_samples)[1:-1]  # Discarding Q and gene constraint values
+                                                comphet_lambda_parameter,
+                                                gene_constraint_weight=1.0,  # Dummy value
+                                                num_samples=num_samples)[1:-1]  # Discard Q and gene constraint values
 
             ol = generate_output_line_comphet(pvalues_array,
                                               out_handle,
@@ -1677,7 +1675,7 @@ def calc_comphet_individual_statistic(out_handle,
     print_comphet_individual_line(out_handle,
                                   pvalues_array,
                                   top_comphet,
-                                  top_comphet.ENS_ID,
+                                  top_comphet.ensembl_gene_id,
                                   ensg_to_genename,
                                   first_line=False)
 

@@ -50,34 +50,31 @@ def parse_arguments():
     
     parser.add_argument('--M', type=str,
         help="""Comma-separated list of prefixes of metadata files.
-        needed only if metadata_run_mode is enabled""", default='')
+        Needed only if metadata_run_mode is enabled""", default='')
     
     parser.add_argument('--o', type=str, default="out",
-        help="""ID of the output files. Default: out""")
+        help="""Prefix of the output files. Default: out""")
     
     parser.add_argument(
-        '--coding_thr', type=float, default=1.5,
-        help="""Minimal deleteriousness score value for coding regions. Default: 1.5
+        '--coding_snv_thr', type=float, default=0.5,
+        help="""Minimal deleteriousness score value for coding regions. Default: 0.5
         Suggested values for comphet variants by deleteriousness score type: 
-        CADD (non Phred-scaled): 1.5
+        CADD (non Phred-scaled): 0.5
         AlphaMissense: 0.1
         PrimateAI-3D: 0.3
         REVEL: 0.5""")
 
     parser.add_argument(
-        '--coding_indel_thr', type=float, default=1.5,
+        '--coding_indel_thr', type=float, default=0.5,
         help="""Minimal deleteriousness score for indels in coding regions.
         Non Phred-scaled CADD scores are always used for coding indels; this threshold may be different
         from the --coding_thr=<> specified if a deletriousness score other than CADD is selected via --coding_score=<>. 
-        Default: 1.5 (value for raw CADD scores)""")
+        Default: 0.5 (value for raw CADD scores)""")
 
     parser.add_argument(
         '--SAI_thr', type=float, default=0.15,
         help="""Minimal SpliceAI score for intronic regions. 
         Default: 0.15""")
-    
-    parser.add_argument('--FDR', type=str, default="0.05,0.1",
-        help="""Comma-separated FDR thresholds to flag and report findings. Default: 0.05,0.1""")
     
     parser.add_argument('--MAF', type=float, default=-1,
         help="""Maximal MAF threshold for variant filtering. Optional parameter for which
@@ -86,17 +83,51 @@ def parse_arguments():
     
     parser.add_argument(
         '--coding_score', type=str, default="CADD",
-        help="""Deleteriousness score type for coding variants.
-        Note: non-Phred-scaled CADD scores are always used for scoring coding indels 
+        help="""Deleteriousness score type for coding SNP variants.
+        Note: non-Phred-scaled CADD scores are ALWAYS used for scoring coding indels 
               (unless the --suppress_indels flag is indicated, in which case no coding indels are included.)
-        Note: Some deleteriousness scores (marked with an *) only score missense variants (see --missense_run).
+        Note: Some deleteriousness scores (marked with an *) only score missense SNVs (see --missense_run).
         Possible values for --coding_score=<>:
         - CADD : raw CADD score
         - AlphaMissense *: AlphaMissense score
         - PAI3D *: Variant deleteriousness predictions from PrimateAI-3D.
         - REVEL *: REVEL score
         Default: CADD""")
+
+    parser.add_argument('--N_probands', type=int, default=-1,
+        help="""Specify the cohort size in the case of metadata_run_mode.
+        The parameter is needed only for the false diagnosis rate estimates.
+        If set to -1, false diagnosis rate will not be estimated. Default -1.""")
     
+    # Boolean arguments
+    parser.add_argument('--missense_run', default=False, action='store_true',
+        help="""Include this argument if PrimateAI-3D, AlphaMissense, REVEL, MisFitD or MisFitS is
+                specified as coding_score.""", action='store_true')
+
+    parser.add_argument('--suppress_indels', default=False, action='store_true',
+        help="""Include this argument to not count indel variants. Default: False.""")
+
+    parser.add_argument('--no_qual_track', default=False, action='store_true',
+        help="""Include if the input variant files are already quality-controlled 
+        and/or do not include the quality control column. Default: False.""")
+
+    parser.add_argument('--metadata_write_mode', default=False, action='store_true',
+        help="""Include this argument if only metadata files are needed. 
+        In a default run, the program will produce metadata files anyway.
+        Will produce an error if paired with --metadata_run_mode. Default: False.""")
+    
+    parser.add_argument('--metadata_run_mode', default=False, action='store_true',
+        help="""Include this argument for a metadata-only run.
+        In a default run, a directory with variant files is specified in the --i parameter.
+        In a metadata-only run, --i parameter is not specified and the input
+        is given by the --M parameter. Default: False.""")
+    
+    parser.add_argument('--force_overwrite', default=False, action='store_true',
+        help="""Include to overwrite metadata files if the metadata files with 
+        ID given by --o are present. If paired with --metadata_run_mode,
+        this parameter will not affect anything. Default: False.""")
+
+    # de novo specific arguments:
     parser.add_argument('--gene_score', type=str, default="Genebayes",
         help="""Gene constraint score used in the weighted FDR procedure. 
         Values:
@@ -118,39 +149,9 @@ def parse_arguments():
         13. 'OMIM_dom': only OMIM dominant genes are considered in the analyses. The effective
             number of tests is reduced by order of magnitude.
         Default: Genebayes""")
-    
-    parser.add_argument('--N_probands', type=int, default=-1,
-        help="""Specify the cohort size in the case of metadata_run_mode.
-        The parameter is needed only for the false diagnosis rate estimates.
-        If set to -1, false diagnosis rate will not be estimated. Default -1.""")
-    
-    # Boolean arguments
-    parser.add_argument('--missense_run', default=False, action='store_true',
-        help="""Include this argument if PrimateAI-3D, AlphaMissense, REVEL, MisFitD or MisFitS is
-                specified as coding_score.""", action='store_true')
 
-    parser.add_argument('--suppress_indels', default=False, action='store_true',
-        help="""Include this argument to not count indel variants. Default: False.""")
-    
-    parser.add_argument('--metadata_write_mode', default=False, action='store_true',
-        help="""Include this argument if only metadata files are needed. 
-        In a default run, the program will produce metadata files anyway.
-        Will produce an error if paired with --metadata_run_mode. Default: False.""")
-    
-    parser.add_argument('--metadata_run_mode', default=False, action='store_true',
-        help="""Include this argument for a metadata-only run.
-        In a default run, a directory with variant files is specified in the --i parameter.
-        In a metadata-only run, --i parameter is not specified and the input
-        is given by the --M parameter. Default: False.""")
-    
-    parser.add_argument('--force_overwrite', default=False, action='store_true',
-        help="""Include to overwrite metadata files if the metadata files with 
-        ID given by --o are present. If paired with --metadata_run_mode,
-        this parameter will not affect anything. Default: False.""")
-
-    parser.add_argument('--no_qual_track', default=False, action='store_true',
-        help="""Include if the input variant files are already quality-controlled 
-        and/or do not include the quality control column. Default: False.""")
+    parser.add_argument('--FDR', type=str, default="0.05,0.1",
+        help="""Comma-separated FDR thresholds to flag and report findings. Default: 0.05,0.1""")
 
     parser.add_argument('--write_muttarg_sums', default=False, action='store_true',
         help="""Include to output per-gene sums of mutational targets instead of lists of
@@ -201,32 +202,37 @@ def check_parameters(args):
         raise AssertionError("! WARNING: NULL RUN because --metadata_write_mode and --metadata_run_mode are enabled.")
 
     # Score restrictions need to match the rules of processing of variant collections.
-    if args.missense_run:
-        print("> missense_run enabled, only SNVs with a missense impact are considered")
-
-    if args.coding_score in ['PAI3D', 'AlphaMissense', 'REVEL'] and not args.missense_run:
-        print(f"! WARNING: {args.coding_score} specified for coding regions, which scores only missense SNVs.")
-        print(f"!   NO OTHER coding SNVs will be considered.")
-        args.missense_run = True
-
-    # No deleteriousness scores besides CADD are available for short InDels
-    if args.coding_score != "CADD" and not args.suppress_indels:
-        print(f"> {args.coding_score} specified for coding regions and indel processing enabled.")
-        print(f"  | Using {args.coding_score} for coding SNVs")
-        print(f"  | Using CADD scores for coding indels with non Phred-scaled threshold {args.coding_indel_thr}.")
-        print(" ! NOTE: Include --suppress_indels flag in the run to only consider SNVs in coding regions.")
-    elif args.coding_score == "CADD" and not args.suppress_indels and args.coding_thr != args.coding_indel_thr:
-        print(
-            f"! NOTE: The CADD threshold for SNVs ({args.coding_thr}) is not the same CADD threshold for indels ({args.coding_indel_thr})")
-        print("  Change these value(s) with --coding_thr=<> or --coding_indel_thr=<>")
-
-    # Threshold output
     if 'C' in args.variant_annots:
-        print(f"> Using {args.coding_score} to process coding variants.")
-        print(f"> Using {args.coding_score} threshold of {args.coding_thr}, change with --coding_thr=<>")
+        print(f"> Using {args.coding_score} to process coding SNVs with threshold {args.coding_snv_thr}.")
+        print(f"| Change score type with --coding_score=<> and threshold with --coding_snv_thr=<>.")
+
+        if args.missense_run:
+            print("| --missense_run enabled, only SNVs with a missense impact are considered")
+
+        if args.coding_score != "CADD":
+            print(f"| Consider updating the \"coding_snv_score\" key/value pair in \"vcf_format_dict\" in cfg ")
+            print(f"  to read in the correct columm (i.e., not \"CADD-raw\") from your input variant files.")
+
+            if args.coding_score in ['PAI3D', 'AlphaMissense', 'REVEL'] and not args.missense_run:
+                print(
+                    f"! WARNING: {args.coding_score} only scores missense SNVs. NO OTHER coding SNVs will be considered.")
+                args.missense_run = True
+
+            # No deleteriousness scores besides CADD are available for short indels
+            if not args.suppress_indels:
+                print(f"| Using CADD for coding indels with non Phred-scaled threshold {args.coding_indel_thr}.")
+                print(" ! Change coding indel score threshold with --coding_indel_thr=<>.")
+                print(" ! Include --suppress_indels flag to consider only SNVs in coding and intronic regions.")
+
+        elif not args.suppress_indels and args.coding_snv_thr != args.coding_indel_thr:
+            print(
+                f"! NOTE: The CADD threshold for SNVs ({args.coding_snv_thr}) is not the same CADD threshold for indels ({args.coding_indel_thr})")
+            print("  Change these value(s) with --coding_snv_thr=<> or --coding_indel_thr=<>")
 
     if 'I' in args.variant_annots:
-        print(f"> Using SpliceAI threshold of {args.SAI_thr}, change with --SAI_thr=<>")
+        print(f"> Using SpliceAI to process intronic SNVs/indels with threshold {args.SAI_thr}.")
+        print(f"| Change intronic variant score threshold with --SAI_thr=<>.")
+        print(f"| Exclude all intronic variants with --variant_annots=C.")
 
     # Gene constraint metric output
     print(f"> Using {args.gene_score} as gene constraint metric in weighted FDR.")
@@ -262,7 +268,7 @@ if __name__ == "__main__":
     args = check_parameters(args)
 
     # Scores are stored in score_threshold_dict object throughout
-    score_thr_dict = {'C' : args.coding_thr,
+    score_thr_dict = {'C' : args.coding_snv_thr,
                       'I' : args.SAI_thr, 
                       'CInd' : args.coding_indel_thr}
 
@@ -331,7 +337,7 @@ if __name__ == "__main__":
         gene_mutdict = stat_lib.make_gene_mutdict(gene_instances_dict)
 
         # ENS_ID_y_dict: ensembl_gene_id -> y statistic
-        ENS_ID_y_dict = stat_lib.count_y(gene_instances_dict, args.o)
+        ENS_ID_y_dict = stat_lib.count_y(gene_instances_dict)
 
         # Main function for the statistical inference. Look in stat_lib for details
         stat_lib.calc_denovo_stat(ENS_ID_y_dict,

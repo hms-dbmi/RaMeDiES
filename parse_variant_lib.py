@@ -31,12 +31,14 @@ import numpy as np
 
 def get_missing_columns(header,
                         de_novo_bool,
+                        suppress_indels_flag,
                         consequence_list,
                         maf_thr,
                         no_qual_track_bool):
     """
     :param header: dictionary with column name -> variable name
     :param de_novo_bool: True if running on de novos
+    :param suppress_indels_flag: True if indels are to be ignored
     :param consequence_list: variant type annotations considered ('C' for coding, 'I' for intronic)
     :param maf_thr: no filter imposed if not specified
     :param no_qual_track_bool: False if quality control track is missing
@@ -49,27 +51,46 @@ def get_missing_columns(header,
         if column_name not in header:
             missing_terms.append(column_name)
 
+    # Reverse dictionary with input variant file format headers; note that some columns might be used more than once
+    rev_vcf_format_dict = {}
+    for k, v in cfg.vcf_format_dict.items():
+        if v not in rev_vcf_format_dict:
+            rev_vcf_format_dict[v] = set()
+        rev_vcf_format_dict[v].add(k)
+
     missing_terms_2 = []
+
+    # which columns do we care about?
     for column_name in missing_terms:
 
         # ignore coding scores if excluding coding variants
-        if 'C' not in consequence_list and cfg.rev_vcf_format_dict[column_name] == "coding_score":
+        if 'C' not in consequence_list and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                                if column_use not in ["coding_snv_score", "coding_indel_score"]]) < 1:
+            continue
+
+        # ignore coding indel scores if indels are excluded:
+        if suppress_indels_flag and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                         if column_use != "coding_indel_score"]) < 1:
             continue
 
         # ignore SpliceAI scores if excluding intronic variants
-        if 'I' not in consequence_list and cfg.rev_vcf_format_dict[column_name].startswith("SAI"):
+        if 'I' not in consequence_list and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                                if not column_use.startswith("SAI")]) < 1:
             continue
 
-        # ignore inherited variants when running in de novo mode
-        if de_novo_bool and cfg.rev_vcf_format_dict[column_name] == "inherited_from":
+        # ignore inherited variant information when running in de novo mode
+        if de_novo_bool and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                 if column_use != "inherited_from"]) < 1:
             continue
 
         # ignore MAF column if no threshold is specified
-        if maf_thr == -1 and cfg.rev_vcf_format_dict[column_name] == "MAF":
+        if maf_thr == -1 and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                 if column_use != "MAF"]) < 1:
             continue
 
         # ignore quality Roulette track as specified
-        if no_qual_track_bool and cfg.rev_vcf_format_dict[column_name] == "qual_track":
+        if no_qual_track_bool and len([column_use for column_use in rev_vcf_format_dict[column_name]
+                                 if column_use != "qual_track"]) < 1:
             continue
 
         missing_terms_2.append(column_name)
@@ -151,7 +172,10 @@ def get_score_val(variant_line, header, variant_type, score_thr_dict):
     """
 
     if variant_type[0] == 'C':
-        score = variant_line[header[cfg.vcf_format_dict["coding_score"]]]
+        if variant_type[1] == 'I':
+            score = variant_line[header[cfg.vcf_format_dict["coding_indel_score"]]]
+        else:
+            score = variant_line[header[cfg.vcf_format_dict["coding_score"]]]
         if not score[-1].isdigit():
             return None
         else:
@@ -294,6 +318,7 @@ def parse_variant_input(input_variant_file,
                 header = {column_name: column_index for column_index, column_name in enumerate(variant_line)}
                 missing_terms = get_missing_columns(header,
                                                     de_novo_flag,
+                                                    suppress_indels_flag,
                                                     consequence_list,
                                                     maf_threshold,
                                                     no_qual_track_flag)
@@ -315,7 +340,9 @@ def parse_variant_input(input_variant_file,
             chrom = eval(chrom)
 
             # is variant a coding or intronic variant?
-            variant_types = variant_line[header[cfg.vcf_format_dict["var_annot"]]]
+            variant_types = variant_line[header[cfg.vcf_format_dict["var_annot"]]]  # e.g., missense&nonsense
+
+            # e.g., C for (missense) coding, I for intronic, None if neither
             var_type1 = get_variant_loc_type(variant_types, missense_run_flag)
             if not var_type1:
                 continue

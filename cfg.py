@@ -134,14 +134,12 @@ vcf_format_dict = {"chrom": "chromosome",
                    "SAI_AL": "SpliceAI_acceptor-loss-score",
                    "SAI_DG": "SpliceAI_donor-gain-score",
                    "SAI_DL": "SpliceAI_donor-loss-score",
-                   "coding_score": "CADD-raw",  # CADD score of a mutation
+                   "coding_snv_score": "CADD-raw",  # deleteriousness score of a mutation
+                   "coding_indel_score": "CADD-raw",  # coding indels are ALWAYS only scored by CADD
                    "ensembl_gene_id": "ensembl_gene_id",  # ENSEMBL gene ID
                    "MAF": "MAF",
                    "inherited_from": "inherited_from",  # Parent annotation
                    "qual_track": "DenovoMutationRate"}
-
-# Reverse dictionary with input variant file format headers
-rev_vcf_format_dict = {v: k for k, v in vcf_format_dict.items()}
 
 # Quality track keywords
 # Change the keys of this dictionary to incorporate custom formats
