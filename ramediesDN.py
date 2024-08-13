@@ -102,7 +102,7 @@ def parse_arguments():
     # Boolean arguments
     parser.add_argument('--missense_run', default=False, action='store_true',
         help="""Include this argument if PrimateAI-3D, AlphaMissense, REVEL, MisFitD or MisFitS is
-                specified as coding_score.""", action='store_true')
+                specified as coding_score.""")
 
     parser.add_argument('--suppress_indels', default=False, action='store_true',
         help="""Include this argument to not count indel variants. Default: False.""")
