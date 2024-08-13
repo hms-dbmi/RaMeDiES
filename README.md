@@ -18,14 +18,27 @@ If you use RaMeDiES in your work, please cite our publication:
 * :exclamation: **Operating System:** Linux or MacOS;  Windows is not supported.
   
 ## :sparkles: Configuration
-Edit the configuration `cfg.py` file to specify the name of the column in your [input variant files](https://github.com/hms-dbmi/RaMeDiES/wiki/Variant-data-input) corresponding to the deleteriousness score you'd like to use:
+Edit the configuration `cfg.py` file to specify the name of the column in your [input variant files](https://github.com/hms-dbmi/RaMeDiES/wiki/Variant-data-input) corresponding to the deleteriousness score you'd like to use for coding SNVs:
 
 ```python
-vcf_format_dict = {"coding_score" : "CADD-raw"}  # default is CADD-raw
+vcf_format_dict = {"coding_snv_score" : "CADD-raw"}  # default is CADD-raw
 ```
 
+Note that CADD is the only currently supported score for coding indels, and SpliceAI is the only currently supported score for intronic SNVs and indels.
+
 ## :sparkles: Precomputed data files
-We have precomputed per-gene mutational targets for various variant functionality scores with respect to GRCh38/hg38. *The most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`.
+We have precomputed per-gene mutational targets for various variant functionality scores with respect to GRCh38/hg38. *Pointers to the most up-to-date versions of these files can be found in* `/full/path/to/github/repo/RaMeDiES/data`. 
+
+You will need to have the [git Large File Storage (lfs)](https://git-lfs.com/) extension installed to download these files. It is supported on Mac, Windows, and Linux. On a Linux server without root access, you can install using: 
+
+```bash
+wget -O git-lfs.tar.gz https://github.com/git-lfs/git-lfs/releases/download/v3.5.1/git-lfs-linux-amd64-v3.5.1.tar.gz
+tar -xvzf git-lfs.tar.gz
+mv git-lfs/git-lfs ~/bin
+git lfs install --skip-repo
+```
+
+Then you can run `git pull` to download the following files, or, if that fails, `git reset --hard` instead:
 
 * `ens2gene.txt.gz` (133 KB)
 * `pseudogenes.txt.gz` (225 KB)
