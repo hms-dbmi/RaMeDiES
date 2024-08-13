@@ -1,1 +1,11 @@
 data/score_lists_CS.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/PAI3D_MS.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/REVEL_MS.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/SpliceAI_II.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/ens2gene.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/pseudogenes.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/AlphaMissense_MS.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/CADD_CS.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/gene_constraint_scores.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/CADD_CI.txt.gz filter=lfs diff=lfs merge=lfs -text
+data/SpliceAI_IS.txt.gz filter=lfs diff=lfs merge=lfs -text
