@@ -1,5 +1,7 @@
 # RaMeDiES: Rare Mendelian Disorder Enrichment Statistics
 
+[![DOI](https://zenodo.org/badge/750420281.svg)](https://doi.org/10.5281/zenodo.15595611)
+
 This software package implements three well-calibrated statistical methods for analyzing cohorts of rare disease patients to find:
 1. genes recurrently impacted by _de novo_ mutations across the cohort
 2. genes recurrently impacted by inherited compound heterozygous variants across the cohort
